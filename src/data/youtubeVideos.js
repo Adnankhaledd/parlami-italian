@@ -1,29 +1,32 @@
 export const youtubeVideos = [
-  // A1-A2 Level
-  { id: 'qXKzDgEFKgo', title: 'Italiano per Stranieri - Lezione 1', channel: 'Learn Italian with Lucrezia', level: 'A1', category: 'culture', duration: '8:22', description: 'Basic Italian introduction lesson covering greetings, self-introduction, and essential phrases for absolute beginners.' },
-  { id: 'PGanFkgqlpI', title: 'Italian Listening Practice - Daily Routine', channel: 'Italy Made Easy', level: 'A2', category: 'vlogs', duration: '6:15', description: 'An Italian speaker describes their daily routine using simple present tense. Great for listening practice with common vocabulary.' },
-  { id: '4LhMNpnNGeI', title: 'Ordering Food in Italian', channel: 'Learn Italian with Lucrezia', level: 'A2', category: 'culture', duration: '10:30', description: 'Learn how to order at an Italian restaurant, bar, or pizzeria. Covers common food vocabulary and polite expressions.' },
-  { id: 'e0TFqpEaosg', title: 'Italian Numbers and Shopping', channel: 'Italy Made Easy', level: 'A1', category: 'culture', duration: '7:45', description: 'Practice Italian numbers through a shopping scenario. Learn to ask prices and count in Italian.' },
+  // A1 Level
+  { id: 'q9Au99vcG7A', title: '14 Minute Conversation in Slow Italian', channel: 'Easy Italian', level: 'A1', category: 'interviews', duration: '14:40', description: 'A slow-paced street conversation for absolute beginners, fully subtitled in Italian and English. Perfect first exposure to real spoken Italian.' },
+  { id: 'WqzvcY9XaWU', title: 'Visit Como in Slow Italian', channel: 'Easy Italian', level: 'A1', category: 'vlogs', duration: '15:52', description: 'A guided visit to Lake Como narrated in slow, clear Italian. Introduces basic travel vocabulary, directions, and sightseeing expressions.' },
+  { id: 'FAxsjpZ4lik', title: 'Italian for Beginners: A Mini Language Course', channel: 'Italy Made Easy', level: 'A1', category: 'culture', duration: '6:21:43', description: 'Comprehensive beginner course covering pronunciation, greetings, numbers, basic grammar, and essential phrases — ideal for starting from zero.' },
+
+  // A2 Level
+  { id: 'Q28_M_fBUT0', title: 'How to Order Breakfast in Italy Like a Local', channel: 'Easy Italian', level: 'A2', category: 'culture', duration: '16:19', description: 'Street interviews at Italian bars where locals demonstrate how to order coffee and breakfast. Covers bar vocabulary and Italian breakfast culture.' },
+  { id: 'AMQfHv1WypM', title: 'Learn Italian with a Sit-Com!', channel: 'Italy Made Easy', level: 'A2', category: 'culture', duration: '8:12', description: 'Uses clips from an Italian sit-com to teach everyday conversational Italian. Focuses on colloquial expressions and informal dialogue.' },
+  { id: '7TKty39Lcl0', title: 'I Verbi Riflessivi — Sabato Italiano', channel: 'Learn Italian with Lucrezia', level: 'A2', category: 'vlogs', duration: '1:22:22', description: 'A live lesson on reflexive verbs conducted entirely in Italian with subtitles. Approachable grammar taught through real conversation.' },
 
   // B1 Level
-  { id: '5mFHELpFMCo', title: 'Conversazione Italiana - Al Bar', channel: 'Vaporetto Italiano', level: 'B1', category: 'vlogs', duration: '12:08', description: 'A natural conversation at an Italian bar. Listen to real Italian dialogue about daily life, work, and weekend plans.' },
-  { id: 'SY3PEwIYKEo', title: 'Notizie in Italiano Facile', channel: 'Easy Italian News', level: 'B1', category: 'news', duration: '5:30', description: 'Italian news presented at a slightly slower pace with clear pronunciation. Perfect for intermediate listening practice.' },
-  { id: 'TfkV1JQiSBk', title: 'Ricetta: Pasta alla Carbonara', channel: 'Giallo Zafferano', level: 'B1', category: 'cooking', duration: '6:45', description: 'Learn to make authentic carbonara while practicing Italian cooking vocabulary and imperative forms.' },
-  { id: 'N2lA2YFhCsA', title: 'La Vita in Italia vs America', channel: 'Tia Taylor', level: 'B1', category: 'vlogs', duration: '11:20', description: 'An American living in Italy compares daily life differences. Rich in cultural vocabulary and comparative expressions.' },
-  { id: 'F22bJEhQ9OA', title: 'Street Interviews in Rome', channel: 'Easy Italian', level: 'B1', category: 'interviews', duration: '8:15', description: 'Street interviews with Romans about their favorite foods, places, and Italian traditions. Authentic spoken Italian.' },
-  { id: 'dQw4w9WgXcQ', title: 'Italian Travel Vlog - Naples', channel: 'Italy Travel Tips', level: 'B1', category: 'vlogs', duration: '14:30', description: 'Explore Naples through an Italian vlogger. Learn vocabulary for travel, sightseeing, and local cuisine.' },
+  { id: '7JBs2wPV2eE', title: 'Is Lake Como Worth Visiting? We Asked the Locals', channel: 'Easy Italian', level: 'B1', category: 'interviews', duration: '21:56', description: 'Street interviews with Como residents about tourism. Natural, unscripted Italian with bilingual subtitles — great for hearing regional accents.' },
+  { id: '7faMIiv2E-8', title: 'Vlog: Un Paio di Giorni a Dublino e Vita a Roma', channel: 'Learn Italian with Lucrezia', level: 'B1', category: 'vlogs', duration: '12:29', description: 'Lucrezia vlogs about a trip to Dublin and daily life in Rome, spoken naturally in Italian with subtitles. Authentic everyday vocabulary.' },
+  { id: 'BCWRnjvwWMw', title: 'La Storia Del Caffè in Italia', channel: 'Italiano Automatico', level: 'B1', category: 'culture', duration: '12:48', description: 'A short documentary tracing the history of coffee in Italy. Clear narration, cultural depth, and rich vocabulary around Italian café culture.' },
+  { id: 'p6MHPonUcmI', title: '7 Uses of FIGURATI in Italian', channel: 'Vaporetto Italiano', level: 'B1', category: 'interviews', duration: '15:14', description: 'Explains seven distinct uses of the key word "figurati" in natural Italian conversation, with real-life examples and dialogue.' },
 
   // B2 Level
-  { id: 'kJQP7kiw5Fk', title: 'Dibattito: Il Futuro del Lavoro', channel: 'RAI Cultura', level: 'B2', category: 'news', duration: '15:00', description: 'A panel discussion about the future of work in Italy. Complex arguments, opinions, and formal Italian.' },
-  { id: '2Vv-BfVoq4g', title: 'Ricetta Avanzata: Risotto ai Funghi', channel: 'Giallo Zafferano', level: 'B2', category: 'cooking', duration: '9:20', description: 'Advanced Italian cooking tutorial with detailed instructions. Practice understanding complex sequences and culinary terms.' },
-  { id: 'JGwWNGJdvx8', title: 'Intervista con un Imprenditore Italiano', channel: 'Startupitalia', level: 'B2', category: 'interviews', duration: '18:00', description: 'In-depth interview with an Italian entrepreneur about business culture, challenges, and innovation in Italy.' },
-  { id: 'RgKAFK5djSk', title: 'Storia dell\'Arte Italiana', channel: 'RAI Cultura', level: 'B2', category: 'culture', duration: '12:45', description: 'Documentary exploring Italian Renaissance art. Rich vocabulary about history, art, and cultural heritage.' },
-  { id: 'fJ9rUzIMcZQ', title: 'Podcast: La Politica Italiana Oggi', channel: 'Il Post', level: 'B2', category: 'news', duration: '20:00', description: 'Italian political podcast discussing current events. Formal register, complex sentence structures, and political vocabulary.' },
+  { id: 'Fhn3v844_Ts', title: 'Italians Using the CONGIUNTIVO in Real Life', channel: 'Easy Italian', level: 'B2', category: 'interviews', duration: '9:49', description: 'Street interviews where Italians use the subjunctive naturally. Helps B2 learners hear authentic congiuntivo usage beyond textbook examples.' },
+  { id: 'ZA0GjqSS3tE', title: '5 Borghi Incredibili della Toscana', channel: 'Italiano Automatico', level: 'B2', category: 'culture', duration: '11:01', description: 'Explores five lesser-known Tuscan villages in flowing spoken Italian. Rich descriptive language and B2-level vocabulary throughout.' },
+  { id: 'wleSWChKz0o', title: '5 Carnevali Incredibili Da Vivere in Italia', channel: 'Italiano Automatico', level: 'B2', category: 'culture', duration: '10:10', description: 'Covers five remarkable Italian carnival traditions with Italian subtitles. Upper-intermediate vocabulary and varied sentence structures.' },
+  { id: 'UFl8Dl77cn4', title: 'Discorsi in Osteria — Storie di Crimini', channel: 'GialloZafferano', level: 'B2', category: 'vlogs', duration: '48:59', description: 'Long-form Italian talk show featuring crime journalist Stefano Nazzi. Dense, authentic spoken Italian in a relaxed dinner-table format.' },
 
-  // C1-C2 Level
-  { id: 'lp-EO5I60KA', title: 'Conferenza TED in Italiano', channel: 'TEDx Talks', level: 'C1', category: 'interviews', duration: '16:30', description: 'Italian TED talk about innovation and creativity. Advanced vocabulary, rhetorical techniques, and academic Italian.' },
-  { id: '09R8_2nJtjg', title: 'Documentario: La Cucina Regionale', channel: 'RAI Documentari', level: 'C1', category: 'cooking', duration: '25:00', description: 'Documentary about regional Italian cuisines. Complex narration, specialized vocabulary, and cultural depth.' },
-  { id: 'YQHsXMglC9A', title: 'Dibattito Filosofico Italiano', channel: 'Festival della Filosofia', level: 'C2', category: 'culture', duration: '22:00', description: 'Philosophical debate among Italian intellectuals. Abstract vocabulary, complex argumentation, and sophisticated Italian.' },
+  // C1 Level
+  { id: 'BlIXPCD_etk', title: 'Comprensione Orale: La Pecora Nera di Calvino', channel: 'Vaporetto Italiano', level: 'C1', category: 'culture', duration: '19:31', description: 'Advanced listening comprehension built around Italo Calvino\'s short story. Tests C1-level skills with literary Italian.' },
+  { id: 'qGKxzRr16wA', title: 'I Medici di Firenze: Come Hanno Cambiato la Storia', channel: 'Italiano Automatico', level: 'C1', category: 'culture', duration: '9:16', description: 'A rich historical account of the Medici family\'s influence on Florence. Dense academic vocabulary and complex sentence structures.' },
+
+  // C2 Level
+  { id: 'hWTiAwHqyl0', title: 'Kimi Antonelli vince in Giappone — RAI News', channel: 'RaiNews', level: 'C2', category: 'news', duration: '1:12', description: 'A real RAI news broadcast at full speed with journalistic Italian. Authentic native-speaker news language with no accommodations for learners.' },
 ]
 
 export const videoCategories = [
