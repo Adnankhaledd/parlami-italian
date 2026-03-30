@@ -1,0 +1,86 @@
+export const mistakeCategories = [
+  {
+    id: 'verb_conjugation',
+    name: 'Verb Conjugation',
+    nameIt: 'Coniugazione dei Verbi',
+    icon: '🔄',
+    description: 'Present, past, future tense errors',
+    examples: ['ho andato → sono andato', 'io vado → io va'],
+  },
+  {
+    id: 'gender_agreement',
+    name: 'Gender Agreement',
+    nameIt: 'Concordanza di Genere',
+    icon: '⚤',
+    description: 'Masculine/feminine noun and adjective agreement',
+    examples: ['la problema → il problema', 'una bello casa → una bella casa'],
+  },
+  {
+    id: 'articles',
+    name: 'Articles',
+    nameIt: 'Articoli',
+    icon: '📝',
+    description: 'Definite/indefinite article usage',
+    examples: ['il studente → lo studente', 'un amica → un\'amica'],
+  },
+  {
+    id: 'prepositions',
+    name: 'Prepositions',
+    nameIt: 'Preposizioni',
+    icon: '📍',
+    description: 'Preposition choice and articulated prepositions',
+    examples: ['vado a il cinema → vado al cinema', 'in la mattina → la mattina'],
+  },
+  {
+    id: 'word_order',
+    name: 'Word Order',
+    nameIt: 'Ordine delle Parole',
+    icon: '↔️',
+    description: 'Sentence structure and word placement',
+    examples: ['io non ho capito mai → non ho mai capito'],
+  },
+  {
+    id: 'vocabulary',
+    name: 'Vocabulary',
+    nameIt: 'Vocabolario',
+    icon: '📖',
+    description: 'Wrong word choice or false friends',
+    examples: ['sono eccitato → sono emozionato', 'ho realizzato → mi sono reso conto'],
+  },
+  {
+    id: 'pronouns',
+    name: 'Pronouns',
+    nameIt: 'Pronomi',
+    icon: '👤',
+    description: 'Object pronouns, reflexive, relative pronouns',
+    examples: ['io mi piace → a me piace / mi piace', 'lo ho visto → l\'ho visto'],
+  },
+  {
+    id: 'subjunctive',
+    name: 'Subjunctive',
+    nameIt: 'Congiuntivo',
+    icon: '🎭',
+    description: 'Missing or incorrect subjunctive mood',
+    examples: ['penso che è → penso che sia', 'voglio che tu vai → voglio che tu vada'],
+  },
+  {
+    id: 'spelling',
+    name: 'Spelling/Accent',
+    nameIt: 'Ortografia/Accenti',
+    icon: '✏️',
+    description: 'Spelling mistakes and accent marks',
+    examples: ['perche → perché', 'citta → città'],
+  },
+  {
+    id: 'other',
+    name: 'Other',
+    nameIt: 'Altro',
+    icon: '💡',
+    description: 'Other grammar or usage issues',
+    examples: [],
+  },
+]
+
+export function getCategoryById(id) {
+  return mistakeCategories.find((c) => c.id === id) || mistakeCategories.find((c) => c.id === 'other')
+}
