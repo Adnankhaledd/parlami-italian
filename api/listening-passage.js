@@ -30,12 +30,26 @@ IMPORTANT: Respond with valid JSON only, no text before or after.
 {
   "passage": "The full Italian paragraph here",
   "translation": "Full English translation of the paragraph",
-  "comprehensionQuestion": {
-    "question": "A question in English testing understanding of the passage",
-    "options": ["Option A", "Option B", "Option C", "Option D"],
-    "correctIndex": 0,
-    "explanation": "Why this is correct, referencing the passage"
-  },
+  "comprehensionQuestions": [
+    {
+      "question": "A question in English testing understanding of the passage",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correctIndex": 0,
+      "explanation": "Why this is correct, referencing the passage"
+    },
+    {
+      "question": "Second question about a detail or vocabulary meaning",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correctIndex": 0,
+      "explanation": "Why this is correct"
+    },
+    {
+      "question": "Third question — inference or 'what does X mean in context'",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correctIndex": 0,
+      "explanation": "Why this is correct"
+    }
+  ],
   "vocabularyWords": [
     {
       "word": "the Italian word",
@@ -48,12 +62,18 @@ IMPORTANT: Respond with valid JSON only, no text before or after.
   ],
   "topic": "${topic}",
   "level": "${level}"
-}`
+}
+
+RULES for comprehension questions:
+- Question 1: main idea or general understanding
+- Question 2: specific detail or fact from the passage
+- Question 3: vocabulary in context or inference — what does a word/phrase mean based on context?
+- Make wrong options plausible, not obviously wrong`
 
   try {
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1500,
+      max_tokens: 2000,
       system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: `Generate a listening comprehension passage about "${topic}" for ${level} level.` }],
     })

@@ -1,9 +1,9 @@
 import { useState, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Play, Volume2, BookOpen, CheckCircle, XCircle, ChevronRight,
-  Plus, Library, Loader2, RefreshCw, Star, Trophy, Search,
-  Filter, ArrowLeft, Sparkles, Brain
+  Play, Volume2, CheckCircle, XCircle, ChevronRight,
+  Library, Loader2, RefreshCw, Star, Trophy, Search,
+  ArrowLeft, Sparkles, Brain
 } from 'lucide-react'
 import { useGame } from '../contexts/GameContext'
 import { generateListeningPassage } from '../services/api'
@@ -33,34 +33,25 @@ const MASTERY_COLORS = {
   mastered: 'text-olive bg-olive/10 border-olive/30',
 }
 
-function getMastery(encounters) {
-  if (encounters >= 7) return 'mastered'
-  if (encounters >= 4) return 'familiar'
-  if (encounters >= 2) return 'learning'
+function getMastery(w) {
+  if (w.mastered || (w.correctQuizzes || 0) >= 5) return 'mastered'
+  if ((w.correctQuizzes || 0) >= 3) return 'familiar'
+  if ((w.correctQuizzes || 0) >= 1) return 'learning'
   return 'new'
 }
 
 export default function WordListening() {
-  const [tab, setTab] = useState('listen') // 'listen' | 'library'
+  const [tab, setTab] = useState('listen')
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="h-full">
-      {/* Tabs */}
       <div className="flex items-center gap-4 mb-6">
-        <button
-          onClick={() => setTab('listen')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-colors ${
-            tab === 'listen' ? 'bg-terracotta text-white' : 'text-navy-600 hover:text-cream'
-          }`}
-        >
+        <button onClick={() => setTab('listen')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-colors ${tab === 'listen' ? 'bg-terracotta text-white' : 'text-navy-600 hover:text-cream'}`}>
           <Volume2 size={16} /> Listen & Learn
         </button>
-        <button
-          onClick={() => setTab('library')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-colors ${
-            tab === 'library' ? 'bg-terracotta text-white' : 'text-navy-600 hover:text-cream'
-          }`}
-        >
+        <button onClick={() => setTab('library')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-colors ${tab === 'library' ? 'bg-terracotta text-white' : 'text-navy-600 hover:text-cream'}`}>
           <Library size={16} /> Word Library
           <WordCount />
         </button>
@@ -85,38 +76,58 @@ function WordCount() {
   const { state } = useGame()
   const count = state.wordLibrary?.length || 0
   if (!count) return null
-  return (
-    <span className="bg-navy-700 text-navy-600 text-xs rounded-full px-2 py-0.5">{count}</span>
-  )
+  return <span className="bg-navy-700 text-navy-600 text-xs rounded-full px-2 py-0.5">{count}</span>
 }
 
 // ─── Listen & Learn ──────────────────────────────────────────────────────────
 
 function ListenAndLearn() {
-  const { state, addXP } = useGame()
+  const { state, addXP, addWordToLibrary, encounterWord, quizWordCorrect, quizWordWrong } = useGame()
   const [level, setLevel] = useState(state.assessmentResult?.speakingLevel || 'B1')
   const [topic, setTopic] = useState(TOPICS[0])
-  const [phase, setPhase] = useState('setup') // setup | loading | listen | question | words | done
+  // setup | loading | listen | questions | words | quiz | done
+  const [phase, setPhase] = useState('setup')
   const [passage, setPassage] = useState(null)
+  const [questionIndex, setQuestionIndex] = useState(0)
   const [selectedAnswer, setSelectedAnswer] = useState(null)
   const [answered, setAnswered] = useState(false)
-  const [savedWords, setSavedWords] = useState([])
+  const [correctCount, setCorrectCount] = useState(0)
+  // Quiz state
+  const [quizIndex, setQuizIndex] = useState(0)
+  const [quizAnswer, setQuizAnswer] = useState(null)
+  const [quizAnswered, setQuizAnswered] = useState(false)
+  const [quizCorrectCount, setQuizCorrectCount] = useState(0)
+
   const { speak, speaking } = useSpeechSynthesis()
 
-  // Words the user needs more exposure to (for spaced repetition in passages)
   const reviewWords = useMemo(() => {
     return (state.wordLibrary || [])
-      .filter(w => !w.mastered && w.encounters < 5)
+      .filter(w => !w.mastered && (w.correctQuizzes || 0) < 5)
       .map(w => w.word)
       .slice(0, 5)
   }, [state.wordLibrary])
 
+  const questions = useMemo(() => {
+    if (!passage) return []
+    // Support both old (comprehensionQuestion) and new (comprehensionQuestions) format
+    if (passage.comprehensionQuestions) return passage.comprehensionQuestions
+    if (passage.comprehensionQuestion) return [passage.comprehensionQuestion]
+    return []
+  }, [passage])
+
+  const vocabWords = passage?.vocabularyWords || []
+
   const handleGenerate = useCallback(async () => {
     setPhase('loading')
     setPassage(null)
+    setQuestionIndex(0)
     setSelectedAnswer(null)
     setAnswered(false)
-    setSavedWords([])
+    setCorrectCount(0)
+    setQuizIndex(0)
+    setQuizAnswer(null)
+    setQuizAnswered(false)
+    setQuizCorrectCount(0)
     try {
       const data = await generateListeningPassage({ level, topic: topic.id, reviewWords })
       setPassage(data)
@@ -132,29 +143,99 @@ function ListenAndLearn() {
     if (passage?.passage) speak(passage.passage, 0.85)
   }, [passage, speak])
 
+  // ─── Comprehension Questions ───
   const handleAnswer = (idx) => {
     if (answered) return
     setSelectedAnswer(idx)
     setAnswered(true)
-    const correct = idx === passage.comprehensionQuestion.correctIndex
-    if (correct) addXP(5)
+    if (idx === questions[questionIndex]?.correctIndex) {
+      setCorrectCount(c => c + 1)
+      addXP(3)
+    }
   }
 
-  const handleDone = () => {
-    addXP(10 + savedWords.length * 3)
-    setPhase('done')
+  const handleNextQuestion = () => {
+    if (questionIndex + 1 < questions.length) {
+      setQuestionIndex(i => i + 1)
+      setSelectedAnswer(null)
+      setAnswered(false)
+    } else {
+      // Auto-save words & move to word review
+      autoSaveWords()
+      setPhase('words')
+    }
   }
+
+  // ─── Auto-save words ───
+  const autoSaveWords = () => {
+    for (const w of vocabWords) {
+      const exists = (state.wordLibrary || []).some(
+        lw => lw.word?.toLowerCase() === w.word?.toLowerCase()
+      )
+      if (exists) {
+        encounterWord(w.word)
+      } else {
+        addWordToLibrary({
+          word: w.word, translation: w.translation, definition: w.definition,
+          grammar: w.grammar, exampleSentence: w.exampleSentence,
+          exampleTranslation: w.exampleTranslation, level, topic: topic.id,
+        })
+      }
+    }
+  }
+
+  // ─── Word Quiz ───
+  const quizWords = useMemo(() => {
+    // Build quiz: show Italian word → pick the English translation
+    return vocabWords.map(w => {
+      const wrongOptions = vocabWords
+        .filter(v => v.word !== w.word)
+        .map(v => v.translation)
+        .slice(0, 2)
+      // Add a decoy if we don't have enough
+      while (wrongOptions.length < 3) wrongOptions.push('something else')
+      const allOptions = [w.translation, ...wrongOptions.slice(0, 3)].sort(() => Math.random() - 0.5)
+      return { ...w, options: allOptions, correctIdx: allOptions.indexOf(w.translation) }
+    })
+  }, [vocabWords])
+
+  const currentQuiz = quizWords[quizIndex]
+
+  const handleQuizAnswer = (idx) => {
+    if (quizAnswered) return
+    setQuizAnswer(idx)
+    setQuizAnswered(true)
+    if (idx === currentQuiz.correctIdx) {
+      quizWordCorrect(currentQuiz.word)
+      setQuizCorrectCount(c => c + 1)
+      addXP(2)
+    } else {
+      quizWordWrong(currentQuiz.word)
+    }
+  }
+
+  const handleNextQuiz = () => {
+    if (quizIndex + 1 < quizWords.length) {
+      setQuizIndex(i => i + 1)
+      setQuizAnswer(null)
+      setQuizAnswered(false)
+    } else {
+      addXP(10)
+      setPhase('done')
+    }
+  }
+
+  // ─── Render ───
 
   if (phase === 'setup') {
     return (
       <div className="max-w-2xl">
         <div className="mb-2">
           <h1 className="text-2xl font-bold text-cream">Listen & Learn</h1>
-          <p className="text-navy-600 text-sm mt-1">AI generates a passage, you listen, answer a question, and learn new words that go straight to your library.</p>
+          <p className="text-navy-600 text-sm mt-1">Listen to a passage, answer questions, then quiz yourself on the new words.</p>
         </div>
 
         <div className="card mt-6">
-          {/* Level */}
           <div className="mb-5">
             <p className="text-xs text-navy-600 mb-2 font-medium uppercase tracking-wide">Your Level</p>
             <div className="flex gap-2">
@@ -167,7 +248,6 @@ function ListenAndLearn() {
             </div>
           </div>
 
-          {/* Topic */}
           <div className="mb-6">
             <p className="text-xs text-navy-600 mb-2 font-medium uppercase tracking-wide">Topic</p>
             <div className="grid grid-cols-3 gap-2">
@@ -185,7 +265,7 @@ function ListenAndLearn() {
             <div className="mb-5 p-3 bg-navy-800/50 rounded-xl border border-navy-700/30">
               <p className="text-xs text-navy-600 mb-1.5 flex items-center gap-1.5">
                 <Brain size={12} className="text-terracotta" />
-                The passage will also include words you're still learning:
+                Words you're still learning will appear in the passage:
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {reviewWords.map(w => (
@@ -217,14 +297,25 @@ function ListenAndLearn() {
     return (
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="card max-w-md mx-auto text-center py-12">
         <Trophy size={40} className="text-yellow-400 mx-auto mb-4" />
-        <h2 className="text-xl font-bold text-cream mb-2">Well done!</h2>
-        <p className="text-navy-600 mb-1">You learned <span className="text-terracotta font-semibold">{savedWords.length} new word{savedWords.length !== 1 ? 's' : ''}</span></p>
-        <p className="text-navy-600 text-sm mb-6">They've been added to your Word Library</p>
-        <div className="flex gap-3 justify-center">
-          <button onClick={() => setPhase('setup')} className="btn-primary flex items-center gap-2">
-            <RefreshCw size={16} /> Another Passage
-          </button>
+        <h2 className="text-xl font-bold text-cream mb-4">Session Complete!</h2>
+        <div className="flex justify-center gap-8 mb-6">
+          <div>
+            <p className="text-2xl font-bold text-cream">{correctCount}/{questions.length}</p>
+            <p className="text-xs text-navy-600">Comprehension</p>
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-olive">{quizCorrectCount}/{quizWords.length}</p>
+            <p className="text-xs text-navy-600">Word Quiz</p>
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-terracotta">{vocabWords.length}</p>
+            <p className="text-xs text-navy-600">Words Added</p>
+          </div>
         </div>
+        <p className="text-navy-600 text-sm mb-6">Words saved to your library. Get them right in 5 quizzes to master them.</p>
+        <button onClick={() => setPhase('setup')} className="btn-primary flex items-center justify-center gap-2 mx-auto">
+          <RefreshCw size={16} /> Another Passage
+        </button>
       </motion.div>
     )
   }
@@ -233,65 +324,69 @@ function ListenAndLearn() {
 
   return (
     <div className="max-w-2xl">
-      {/* Back */}
       <button onClick={() => setPhase('setup')} className="flex items-center gap-1.5 text-navy-600 hover:text-cream text-sm mb-4 transition-colors">
         <ArrowLeft size={14} /> Change topic
       </button>
 
-      {/* Phase: listen */}
+      {/* Progress indicator */}
+      <div className="flex items-center gap-1.5 mb-4">
+        {['listen', 'questions', 'words', 'quiz'].map((p, i) => (
+          <div key={p} className="flex items-center gap-1.5">
+            <div className={`w-2 h-2 rounded-full ${['listen', 'questions', 'words', 'quiz'].indexOf(phase) >= i ? 'bg-terracotta' : 'bg-navy-700'}`} />
+            {i < 3 && <div className={`w-8 h-0.5 ${['listen', 'questions', 'words', 'quiz'].indexOf(phase) > i ? 'bg-terracotta' : 'bg-navy-700'}`} />}
+          </div>
+        ))}
+        <span className="text-xs text-navy-600 ml-2">
+          {phase === 'listen' ? 'Listen' : phase === 'questions' ? `Question ${questionIndex + 1}/${questions.length}` : phase === 'words' ? 'New Words' : `Quiz ${quizIndex + 1}/${quizWords.length}`}
+        </span>
+      </div>
+
+      {/* ── Listen Phase ── */}
       {phase === 'listen' && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
           <div className="card mb-4">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs text-navy-600 font-medium uppercase tracking-wide">{topic.emoji} {topic.label} · {level}</span>
-              <span className="text-xs text-navy-600">{passage.vocabularyWords?.length} new words</span>
             </div>
 
-            {/* Play button */}
             <div className="text-center mb-5">
-              <button
-                onClick={handlePlay}
-                disabled={speaking}
-                className="w-20 h-20 rounded-full bg-gradient-to-br from-terracotta to-coral flex items-center justify-center mx-auto hover:scale-105 transition-transform disabled:opacity-60 shadow-lg"
-              >
-                {speaking
-                  ? <Volume2 size={32} className="text-white animate-pulse" />
-                  : <Play size={32} className="text-white ml-1" />}
+              <button onClick={handlePlay} disabled={speaking}
+                className="w-20 h-20 rounded-full bg-gradient-to-br from-terracotta to-coral flex items-center justify-center mx-auto hover:scale-105 transition-transform disabled:opacity-60 shadow-lg">
+                {speaking ? <Volume2 size={32} className="text-white animate-pulse" /> : <Play size={32} className="text-white ml-1" />}
               </button>
               <p className="text-xs text-navy-600 mt-2">{speaking ? 'Playing...' : 'Press to listen'}</p>
             </div>
 
-            {/* Transcript (shown after play) */}
             <div className="bg-navy-800/50 rounded-xl p-4 mb-4">
               <p className="text-cream leading-relaxed text-sm">{passage.passage}</p>
               <p className="text-navy-600 text-xs mt-2 italic">{passage.translation}</p>
             </div>
 
-            <button onClick={() => setPhase('question')} className="btn-primary w-full flex items-center justify-center gap-2">
-              Answer the Question <ChevronRight size={16} />
+            <button onClick={() => setPhase('questions')} className="btn-primary w-full flex items-center justify-center gap-2">
+              Answer Questions ({questions.length}) <ChevronRight size={16} />
             </button>
           </div>
         </motion.div>
       )}
 
-      {/* Phase: comprehension question */}
-      {phase === 'question' && passage.comprehensionQuestion && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+      {/* ── Questions Phase ── */}
+      {phase === 'questions' && questions[questionIndex] && (
+        <motion.div key={questionIndex} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
           <div className="card mb-4">
-            <p className="text-xs text-navy-600 mb-3 font-medium uppercase tracking-wide">Comprehension Check</p>
-            <p className="text-cream font-medium mb-4">{passage.comprehensionQuestion.question}</p>
+            <p className="text-xs text-navy-600 mb-3 font-medium uppercase tracking-wide">
+              Question {questionIndex + 1} of {questions.length}
+            </p>
+            <p className="text-cream font-medium mb-4">{questions[questionIndex].question}</p>
 
             <div className="space-y-2 mb-4">
-              {passage.comprehensionQuestion.options.map((opt, idx) => {
-                const isCorrect = idx === passage.comprehensionQuestion.correctIndex
+              {questions[questionIndex].options.map((opt, idx) => {
+                const isCorrect = idx === questions[questionIndex].correctIndex
                 const isSelected = idx === selectedAnswer
-                let cls = 'border border-navy-700/50 bg-navy-800/50 text-cream'
+                let cls = 'border border-navy-700/50 bg-navy-800/50 text-cream hover:border-terracotta/50 hover:bg-terracotta/5 cursor-pointer'
                 if (answered) {
                   if (isCorrect) cls = 'border border-olive bg-olive/10 text-olive'
                   else if (isSelected && !isCorrect) cls = 'border border-red-500 bg-red-500/10 text-red-400'
                   else cls = 'border border-navy-700/30 bg-navy-800/30 text-navy-600'
-                } else {
-                  cls = 'border border-navy-700/50 bg-navy-800/50 text-cream hover:border-terracotta/50 hover:bg-terracotta/5 cursor-pointer'
                 }
                 return (
                   <button key={idx} onClick={() => handleAnswer(idx)} disabled={answered}
@@ -310,10 +405,10 @@ function ListenAndLearn() {
             {answered && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                 <p className="text-xs text-navy-600 bg-navy-800/50 rounded-xl p-3 mb-4">
-                  {passage.comprehensionQuestion.explanation}
+                  {questions[questionIndex].explanation}
                 </p>
-                <button onClick={() => setPhase('words')} className="btn-primary w-full flex items-center justify-center gap-2">
-                  See New Words <ChevronRight size={16} />
+                <button onClick={handleNextQuestion} className="btn-primary w-full flex items-center justify-center gap-2">
+                  {questionIndex + 1 < questions.length ? `Next Question` : `See New Words`} <ChevronRight size={16} />
                 </button>
               </motion.div>
             )}
@@ -321,75 +416,98 @@ function ListenAndLearn() {
         </motion.div>
       )}
 
-      {/* Phase: vocabulary words */}
+      {/* ── Words Phase (review before quiz) ── */}
       {phase === 'words' && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-bold text-cream">New Words</h2>
-            <p className="text-xs text-navy-600">Save them to your library</p>
-          </div>
+          <div className="card mb-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-cream">New Words</h2>
+              <span className="text-xs bg-olive/10 text-olive px-2 py-0.5 rounded-full">Auto-saved to library</span>
+            </div>
 
-          <div className="space-y-3 mb-4">
-            {(passage.vocabularyWords || []).map((w, i) => (
-              <VocabCard key={i} word={w} onSave={(word) => setSavedWords(prev => [...prev, word])} savedWords={savedWords} />
-            ))}
-          </div>
+            <div className="space-y-4">
+              {vocabWords.map((w, i) => (
+                <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}
+                  className="bg-navy-800/50 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <button onClick={() => speak(w.word, 0.85)} className="text-lg font-bold text-cream hover:text-terracotta transition-colors flex items-center gap-1.5">
+                      {w.word} <Volume2 size={14} className="text-navy-600" />
+                    </button>
+                    <span className="text-xs text-navy-600 bg-navy-700 px-2 py-0.5 rounded-full">{w.grammar}</span>
+                  </div>
+                  <p className="text-terracotta font-medium text-sm mb-1">{w.translation}</p>
+                  <p className="text-navy-600 text-xs mb-2">{w.definition}</p>
+                  <div className="bg-navy-900/50 rounded-lg px-3 py-2">
+                    <p className="text-cream text-xs italic">"{w.exampleSentence}"</p>
+                    <p className="text-navy-600 text-xs mt-0.5">{w.exampleTranslation}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
 
-          <button onClick={handleDone} className="btn-primary w-full flex items-center justify-center gap-2">
-            <CheckCircle size={16} /> Finish Session (+{10 + savedWords.length * 3} XP)
-          </button>
+            <p className="text-xs text-navy-600 text-center mt-4 mb-3">Study these words, then test yourself!</p>
+            <button onClick={() => setPhase('quiz')} className="btn-primary w-full flex items-center justify-center gap-2">
+              <Brain size={16} /> Start Word Quiz
+            </button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* ── Quiz Phase ── */}
+      {phase === 'quiz' && currentQuiz && (
+        <motion.div key={quizIndex} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+          <div className="card mb-4">
+            <p className="text-xs text-navy-600 mb-1 font-medium uppercase tracking-wide">
+              Word Quiz · {quizIndex + 1} of {quizWords.length}
+            </p>
+            <p className="text-cream text-sm mb-4">What does this word mean?</p>
+
+            <div className="text-center mb-5">
+              <button onClick={() => speak(currentQuiz.word, 0.85)}
+                className="text-2xl font-bold text-cream hover:text-terracotta transition-colors inline-flex items-center gap-2">
+                {currentQuiz.word} <Volume2 size={18} className="text-navy-600" />
+              </button>
+              <p className="text-xs text-navy-600 mt-1">{currentQuiz.grammar}</p>
+            </div>
+
+            <div className="space-y-2 mb-4">
+              {currentQuiz.options.map((opt, idx) => {
+                const isCorrect = idx === currentQuiz.correctIdx
+                const isSelected = idx === quizAnswer
+                let cls = 'border border-navy-700/50 bg-navy-800/50 text-cream hover:border-terracotta/50 hover:bg-terracotta/5 cursor-pointer'
+                if (quizAnswered) {
+                  if (isCorrect) cls = 'border border-olive bg-olive/10 text-olive'
+                  else if (isSelected && !isCorrect) cls = 'border border-red-500 bg-red-500/10 text-red-400'
+                  else cls = 'border border-navy-700/30 bg-navy-800/30 text-navy-600'
+                }
+                return (
+                  <button key={idx} onClick={() => handleQuizAnswer(idx)} disabled={quizAnswered}
+                    className={`w-full text-left px-4 py-3 rounded-xl text-sm transition-colors flex items-center gap-3 ${cls}`}>
+                    {opt}
+                    {quizAnswered && isCorrect && <CheckCircle size={16} className="ml-auto text-olive" />}
+                    {quizAnswered && isSelected && !isCorrect && <XCircle size={16} className="ml-auto text-red-400" />}
+                  </button>
+                )
+              })}
+            </div>
+
+            {quizAnswered && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                {quizAnswer !== currentQuiz.correctIdx && (
+                  <p className="text-xs text-navy-600 bg-navy-800/50 rounded-xl p-3 mb-3">
+                    <span className="text-cream font-medium">{currentQuiz.word}</span> = {currentQuiz.translation}
+                    <br />{currentQuiz.definition}
+                  </p>
+                )}
+                <button onClick={handleNextQuiz} className="btn-primary w-full flex items-center justify-center gap-2">
+                  {quizIndex + 1 < quizWords.length ? 'Next Word' : 'Finish'} <ChevronRight size={16} />
+                </button>
+              </motion.div>
+            )}
+          </div>
         </motion.div>
       )}
     </div>
-  )
-}
-
-function VocabCard({ word, onSave, savedWords }) {
-  const { addWordToLibrary, state } = useGame()
-  const { speak } = useSpeechSynthesis()
-  const isSaved = savedWords.includes(word.word) || (state.wordLibrary || []).some(w => w.word?.toLowerCase() === word.word?.toLowerCase())
-  const existing = (state.wordLibrary || []).find(w => w.word?.toLowerCase() === word.word?.toLowerCase())
-
-  const handleSave = () => {
-    addWordToLibrary({ word: word.word, translation: word.translation, definition: word.definition, grammar: word.grammar, exampleSentence: word.exampleSentence, exampleTranslation: word.exampleTranslation, level: word.level, topic: word.topic })
-    onSave(word.word)
-  }
-
-  return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="card">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <button onClick={() => speak(word.word, 0.85)} className="text-lg font-bold text-cream hover:text-terracotta transition-colors flex items-center gap-1.5">
-              {word.word}
-              <Volume2 size={14} className="text-navy-600" />
-            </button>
-            <span className="text-xs text-navy-600 bg-navy-800 px-2 py-0.5 rounded-full">{word.grammar}</span>
-          </div>
-          <p className="text-terracotta font-medium text-sm mb-1">{word.translation}</p>
-          <p className="text-navy-600 text-xs mb-3">{word.definition}</p>
-          <div className="bg-navy-800/50 rounded-lg px-3 py-2">
-            <p className="text-cream text-xs italic">"{word.exampleSentence}"</p>
-            <p className="text-navy-600 text-xs mt-0.5">{word.exampleTranslation}</p>
-          </div>
-          {existing && (
-            <p className="text-xs text-navy-600 mt-2">
-              Seen {existing.encounters} time{existing.encounters !== 1 ? 's' : ''} ·{' '}
-              <span className={getMastery(existing.encounters) === 'mastered' ? 'text-olive' : 'text-yellow-400'}>
-                {getMastery(existing.encounters)}
-              </span>
-            </p>
-          )}
-        </div>
-        <button
-          onClick={handleSave}
-          disabled={isSaved}
-          className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${isSaved ? 'bg-olive/10 text-olive cursor-default' : 'bg-terracotta/10 text-terracotta hover:bg-terracotta/20'}`}
-        >
-          {isSaved ? <><CheckCircle size={13} /> Saved</> : <><Plus size={13} /> Save</>}
-        </button>
-      </div>
-    </motion.div>
   )
 }
 
@@ -398,7 +516,7 @@ function VocabCard({ word, onSave, savedWords }) {
 function WordLibrary() {
   const { state, markWordMastered } = useGame()
   const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState('all') // all | new | learning | familiar | mastered
+  const [filter, setFilter] = useState('all')
   const { speak } = useSpeechSynthesis()
 
   const words = state.wordLibrary || []
@@ -407,7 +525,7 @@ function WordLibrary() {
     return words
       .filter(w => {
         const matchSearch = !search || w.word?.toLowerCase().includes(search.toLowerCase()) || w.translation?.toLowerCase().includes(search.toLowerCase())
-        const mastery = getMastery(w.encounters)
+        const mastery = getMastery(w)
         const matchFilter = filter === 'all' || mastery === filter
         return matchSearch && matchFilter
       })
@@ -416,10 +534,10 @@ function WordLibrary() {
 
   const stats = useMemo(() => ({
     total: words.length,
-    mastered: words.filter(w => getMastery(w.encounters) === 'mastered').length,
-    familiar: words.filter(w => getMastery(w.encounters) === 'familiar').length,
-    learning: words.filter(w => getMastery(w.encounters) === 'learning').length,
-    new: words.filter(w => getMastery(w.encounters) === 'new').length,
+    mastered: words.filter(w => getMastery(w) === 'mastered').length,
+    familiar: words.filter(w => getMastery(w) === 'familiar').length,
+    learning: words.filter(w => getMastery(w) === 'learning').length,
+    new: words.filter(w => getMastery(w) === 'new').length,
   }), [words])
 
   if (words.length === 0) {
@@ -427,14 +545,13 @@ function WordLibrary() {
       <div className="flex flex-col items-center justify-center py-24 text-center">
         <Library size={40} className="text-navy-700 mb-4" />
         <h3 className="text-lg font-bold text-cream mb-2">Your library is empty</h3>
-        <p className="text-navy-600 text-sm max-w-xs">Complete a Listen & Learn session and save words to build your library. Words you encounter multiple times level up automatically.</p>
+        <p className="text-navy-600 text-sm max-w-xs">Complete a Listen & Learn session to start building your word library. Words are auto-saved and tracked through quizzes.</p>
       </div>
     )
   }
 
   return (
     <div className="max-w-2xl">
-      {/* Stats */}
       <div className="grid grid-cols-4 gap-3 mb-5">
         {[
           { label: 'Total', value: stats.total, color: 'text-cream' },
@@ -449,22 +566,14 @@ function WordLibrary() {
         ))}
       </div>
 
-      {/* Search + filter */}
       <div className="flex gap-2 mb-4">
         <div className="flex-1 relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-navy-600" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search words..."
-            className="w-full bg-navy-800 border border-navy-700/50 rounded-xl pl-9 pr-4 py-2.5 text-cream placeholder:text-navy-600 text-sm focus:outline-none focus:border-terracotta/50"
-          />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search words..."
+            className="w-full bg-navy-800 border border-navy-700/50 rounded-xl pl-9 pr-4 py-2.5 text-cream placeholder:text-navy-600 text-sm focus:outline-none focus:border-terracotta/50" />
         </div>
-        <select
-          value={filter}
-          onChange={e => setFilter(e.target.value)}
-          className="bg-navy-800 border border-navy-700/50 rounded-xl px-3 py-2.5 text-sm text-cream focus:outline-none focus:border-terracotta/50"
-        >
+        <select value={filter} onChange={e => setFilter(e.target.value)}
+          className="bg-navy-800 border border-navy-700/50 rounded-xl px-3 py-2.5 text-sm text-cream focus:outline-none focus:border-terracotta/50">
           <option value="all">All</option>
           <option value="new">New</option>
           <option value="learning">Learning</option>
@@ -473,13 +582,13 @@ function WordLibrary() {
         </select>
       </div>
 
-      {/* Word list */}
       <div className="space-y-2">
         {filtered.length === 0 && (
           <p className="text-navy-600 text-sm text-center py-8">No words match your filter.</p>
         )}
         {filtered.map((w, i) => {
-          const mastery = getMastery(w.encounters)
+          const mastery = getMastery(w)
+          const quizzes = w.correctQuizzes || 0
           return (
             <motion.div key={w.word + i} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }}
               className="card flex items-start gap-3 py-3">
@@ -499,10 +608,10 @@ function WordLibrary() {
                   <p className="text-xs text-navy-600 italic mt-1">"{w.exampleSentence}"</p>
                 )}
                 <div className="flex items-center gap-3 mt-1.5">
-                  <span className="text-xs text-navy-600">{w.encounters} encounter{w.encounters !== 1 ? 's' : ''}</span>
+                  <span className="text-xs text-navy-600">{w.encounters || 1} seen · {quizzes}/5 quiz</span>
                   <div className="flex gap-0.5">
-                    {Array.from({ length: 7 }).map((_, j) => (
-                      <div key={j} className={`w-2 h-2 rounded-full ${j < w.encounters ? 'bg-terracotta' : 'bg-navy-800'}`} />
+                    {Array.from({ length: 5 }).map((_, j) => (
+                      <div key={j} className={`w-2 h-2 rounded-full ${j < quizzes ? 'bg-olive' : 'bg-navy-800'}`} />
                     ))}
                   </div>
                 </div>

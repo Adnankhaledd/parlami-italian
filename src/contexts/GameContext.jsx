@@ -233,32 +233,68 @@ function gameReducer(state, action) {
       const word = action.payload.word?.toLowerCase()
       const existing = state.wordLibrary.findIndex(w => w.word?.toLowerCase() === word)
       if (existing >= 0) {
-        // increment encounter count
-        const updated = [...state.wordLibrary]
-        updated[existing] = {
-          ...updated[existing],
-          encounters: (updated[existing].encounters || 1) + 1,
-          mastered: (updated[existing].encounters || 1) >= 6,
-          lastSeen: new Date().toISOString(),
-        }
-        return { ...state, wordLibrary: updated }
+        // Word already exists, don't add duplicate
+        return state
       }
       return {
         ...state,
         wordLibrary: [...state.wordLibrary, {
           ...action.payload,
           encounters: 1,
+          correctQuizzes: 0,
           mastered: false,
           addedDate: new Date().toISOString(),
           lastSeen: new Date().toISOString(),
         }],
       }
     }
+    case 'ENCOUNTER_WORD': {
+      // Increment encounter count for an existing word
+      const word = action.payload?.toLowerCase()
+      const idx = state.wordLibrary.findIndex(w => w.word?.toLowerCase() === word)
+      if (idx < 0) return state
+      const updated = [...state.wordLibrary]
+      const newEncounters = (updated[idx].encounters || 1) + 1
+      updated[idx] = {
+        ...updated[idx],
+        encounters: newEncounters,
+        lastSeen: new Date().toISOString(),
+      }
+      return { ...state, wordLibrary: updated }
+    }
+    case 'QUIZ_WORD_CORRECT': {
+      const word = action.payload?.toLowerCase()
+      const idx = state.wordLibrary.findIndex(w => w.word?.toLowerCase() === word)
+      if (idx < 0) return state
+      const updated = [...state.wordLibrary]
+      const newCorrect = (updated[idx].correctQuizzes || 0) + 1
+      const newEncounters = (updated[idx].encounters || 1) + 1
+      updated[idx] = {
+        ...updated[idx],
+        encounters: newEncounters,
+        correctQuizzes: newCorrect,
+        mastered: newCorrect >= 5,
+        lastSeen: new Date().toISOString(),
+      }
+      return { ...state, wordLibrary: updated }
+    }
+    case 'QUIZ_WORD_WRONG': {
+      const word = action.payload?.toLowerCase()
+      const idx = state.wordLibrary.findIndex(w => w.word?.toLowerCase() === word)
+      if (idx < 0) return state
+      const updated = [...state.wordLibrary]
+      updated[idx] = {
+        ...updated[idx],
+        encounters: (updated[idx].encounters || 1) + 1,
+        lastSeen: new Date().toISOString(),
+      }
+      return { ...state, wordLibrary: updated }
+    }
     case 'MARK_WORD_MASTERED': {
       const idx = state.wordLibrary.findIndex(w => w.word?.toLowerCase() === action.payload?.toLowerCase())
       if (idx < 0) return state
       const updated = [...state.wordLibrary]
-      updated[idx] = { ...updated[idx], mastered: true }
+      updated[idx] = { ...updated[idx], mastered: true, correctQuizzes: 5 }
       return { ...state, wordLibrary: updated }
     }
     case 'SET_ONBOARDING': {
@@ -393,6 +429,18 @@ export function GameProvider({ children }) {
     dispatch({ type: 'ADD_WORD_TO_LIBRARY', payload: word })
   }, [])
 
+  const encounterWord = useCallback((word) => {
+    dispatch({ type: 'ENCOUNTER_WORD', payload: word })
+  }, [])
+
+  const quizWordCorrect = useCallback((word) => {
+    dispatch({ type: 'QUIZ_WORD_CORRECT', payload: word })
+  }, [])
+
+  const quizWordWrong = useCallback((word) => {
+    dispatch({ type: 'QUIZ_WORD_WRONG', payload: word })
+  }, [])
+
   const markWordMastered = useCallback((word) => {
     dispatch({ type: 'MARK_WORD_MASTERED', payload: word })
   }, [])
@@ -457,6 +505,9 @@ export function GameProvider({ children }) {
     completeSentence,
     addGeneratedSentences,
     addWordToLibrary,
+    encounterWord,
+    quizWordCorrect,
+    quizWordWrong,
     markWordMastered,
     setOnboarding,
     setDailyProgress,
