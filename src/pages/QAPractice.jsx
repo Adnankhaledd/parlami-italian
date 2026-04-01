@@ -4,6 +4,7 @@ import { MessageCircle, Send, Loader2, CheckCircle, XCircle, ArrowRight, RotateC
 import { useGame } from '../contexts/GameContext'
 import { sendMessage } from '../services/api'
 import useSpeechSynthesis from '../hooks/useSpeechSynthesis'
+import { buildMistakeContext } from '../utils/mistakeContext'
 
 const TOPICS = [
   { id: 'daily', label: 'Daily Life', icon: '☀️', desc: 'Routine, food, home' },
@@ -94,7 +95,7 @@ export default function QAPractice() {
     try {
       const result = await sendMessage({
         messages: [{ role: 'user', content: 'Start the Q&A session. Ask me your first question.' }],
-        systemPrompt: QA_SYSTEM_PROMPT(topic.label, level, 1),
+        systemPrompt: QA_SYSTEM_PROMPT(topic.label, level, 1) + buildMistakeContext(state),
       })
 
       const aiMsg = {
@@ -135,7 +136,7 @@ export default function QAPractice() {
 
       const result = await sendMessage({
         messages: apiMessages,
-        systemPrompt: QA_SYSTEM_PROMPT(selectedTopic.label, level, newTurn),
+        systemPrompt: QA_SYSTEM_PROMPT(selectedTopic.label, level, newTurn) + buildMistakeContext(state),
       })
 
       const isPerfect = !result.corrections || result.corrections.length === 0

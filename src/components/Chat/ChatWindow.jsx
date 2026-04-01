@@ -9,6 +9,7 @@ import useSpeechSynthesis from '../../hooks/useSpeechSynthesis'
 import { useGame } from '../../contexts/GameContext'
 import { sendMessage } from '../../services/api'
 import { applyColloquialMode } from '../../utils/colloquialPrompt'
+import { buildMistakeContext } from '../../utils/mistakeContext'
 
 const DEFAULT_SYSTEM_PROMPT = `You are a friendly Italian conversation partner helping a B1-level learner practice speaking. Your name is Parlami.
 
@@ -108,7 +109,7 @@ export default function ChatWindow({
           content: m.role === 'user' ? m.text : m.rawResponse || m.text,
         }))
 
-        const effectivePrompt = applyColloquialMode(systemPrompt, gameState.colloquialMode)
+        const effectivePrompt = applyColloquialMode(systemPrompt + buildMistakeContext(gameState), gameState.colloquialMode)
 
         sendMessage({ messages: apiMessages, systemPrompt: effectivePrompt, scenario })
           .then((result) => {
