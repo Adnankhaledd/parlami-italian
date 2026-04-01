@@ -2,6 +2,7 @@ import { createContext, useContext, useReducer, useEffect, useCallback, useRef, 
 import { getLevelForXP } from '../data/levels'
 import { checkAchievements } from '../data/achievements'
 import { initReviewItem, calculateNextReview, getItemsDueForReview } from '../utils/spacedRepetition'
+import { computeLevel } from '../utils/levelEngine'
 
 const GameContext = createContext(null)
 
@@ -488,8 +489,15 @@ export function GameProvider({ children }) {
     return getItemsDueForReview(state.reviewItems).length
   }, [state.reviewItems])
 
+  // Active CEFR level computed from all performance signals
+  const activeLevel = useMemo(() => computeLevel(state), [
+    state.assessmentResult, state.placementLevel, state.mistakeCounts,
+    state.wordLibrary, state.totalMessages, state.perfectMessages,
+  ])
+
   const value = {
     state,
+    activeLevel,
     addXP,
     addMessage,
     completeScenario,

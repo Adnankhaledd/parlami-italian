@@ -54,12 +54,14 @@ Respond with this JSON:
 }
 
 Rules:
-- Keep questions natural, not like an exam
+- Speak like a real Italian friend, NOT a textbook or teacher. Use natural everyday Italian.
+- Include casual filler words and expressions (tipo, cioè, senti, allora, boh, dai, insomma) — this is how real Italians talk
+- Keep questions natural, like a curious friend chatting, not an exam
 - Reference their previous answers to make follow-ups feel connected
-- If their answer is very short, encourage them to elaborate: "Puoi dirmi di più?"
-- Include a modelAnswer showing how a native would answer YOUR PREVIOUS question (helps them learn natural phrasing)
+- If their answer is very short, encourage them to elaborate: "Dai, raccontami di più!"
+- The modelAnswer should show how a REAL Italian would casually answer — not perfect grammar, but natural speech
 - Set topicTransition to true when starting a new subtopic thread
-- Be warm and conversational, like a friend practicing with them`
+- Be warm and conversational, like hanging out at a bar with a friend`
 
 export default function QAPractice() {
   const [selectedTopic, setSelectedTopic] = useState(null)
@@ -75,9 +77,8 @@ export default function QAPractice() {
   const inputRef = useRef(null)
 
   const { speak, speaking, stopSpeaking } = useSpeechSynthesis()
-  const { addXP, addMessage, addMistakes, addVocabulary } = useGame()
-  const { state } = useGame()
-  const level = state.placementLevel || state.assessmentResult?.level || 'B1'
+  const { addXP, addMessage, addMistakes, addVocabulary, state, activeLevel } = useGame()
+  const level = activeLevel
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })

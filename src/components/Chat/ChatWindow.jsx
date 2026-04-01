@@ -11,13 +11,14 @@ import { sendMessage } from '../../services/api'
 import { applyColloquialMode } from '../../utils/colloquialPrompt'
 import { buildMistakeContext } from '../../utils/mistakeContext'
 
-const DEFAULT_SYSTEM_PROMPT = `You are a friendly Italian conversation partner helping a B1-level learner practice speaking. Your name is Parlami.
+function getDefaultPrompt(level = 'B1') {
+  return `You are a friendly Italian conversation partner helping a ${level}-level learner practice speaking. Your name is Parlami.
 
 IMPORTANT: You must respond with valid JSON only. No text before or after the JSON.
 
 Respond with this exact JSON structure:
 {
-  "response": "Your Italian response here (1-3 sentences, B1-B2 level)",
+  "response": "Your Italian response here (1-3 sentences, ${level} level)",
   "corrections": [
     {
       "original": "what the user said wrong",
@@ -43,20 +44,22 @@ Correction categories explained:
 - other: anything else
 
 Rules:
-- Always respond in Italian naturally, as if having a real conversation
+- Speak like a real Italian friend, NOT a textbook. Use natural, everyday Italian the way people actually talk to each other.
+- Include casual expressions, filler words (tipo, cioè, insomma, allora), and natural phrasing.
 - Keep responses short: 1-3 sentences
 - Identify ALL grammar, vocabulary, and syntax errors in the user's Italian
 - ALWAYS include the "category" field for each correction
 - If the user's Italian is perfect, return an empty corrections array
-- Use B1-B2 level Italian (not too easy, not too hard)
+- Match your Italian to ${level} level — challenge them slightly above their comfort zone
 - Be warm, patient, and encouraging
 - Include 1-3 new vocabulary words the user might not know
 - If the user writes in English, gently encourage them to try in Italian
 - VARIETY IS CRITICAL: Never repeat the same questions, topics, or conversation starters. Each conversation should explore different themes (food, travel, work, hobbies, culture, current events, family, dreams, opinions, daily routines, etc.)
 - Vary your sentence structures, vocabulary level, and conversational style to keep practice fresh and challenging`
+}
 
 export default function ChatWindow({
-  systemPrompt = DEFAULT_SYSTEM_PROMPT,
+  systemPrompt,
   scenario = null,
   onScenarioProgress,
   onAssessment,
@@ -75,7 +78,10 @@ export default function ChatWindow({
 
   const { isListening, transcript, interimTranscript, start, stop, reset, supported: micSupported } = useSpeechRecognition()
   const { speak, speaking, stopSpeaking, supported: ttsSupported } = useSpeechSynthesis()
-  const { addXP, addMessage, addVocabulary, addMistakes, state: gameState, setColloquialMode } = useGame()
+  const { addXP, addMessage, addVocabulary, addMistakes, state: gameState, setColloquialMode, activeLevel } = useGame()
+
+  // Use provided prompt or generate default with active level
+  const basePrompt = systemPrompt || getDefaultPrompt(activeLevel)
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -109,7 +115,7 @@ export default function ChatWindow({
           content: m.role === 'user' ? m.text : m.rawResponse || m.text,
         }))
 
-        const effectivePrompt = applyColloquialMode(systemPrompt + buildMistakeContext(gameState), gameState.colloquialMode)
+        const effectivePrompt = applyColloquialMode(basePrompt + buildMistakeContext(gameState), gameState.colloquialMode)
 
         sendMessage({ messages: apiMessages, systemPrompt: effectivePrompt, scenario })
           .then((result) => {

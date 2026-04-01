@@ -9,7 +9,7 @@ import { useGame } from '../contexts/GameContext'
 import { getCategoryById } from '../data/mistakeCategories'
 
 export default function FocusPractice() {
-  const { state, clearLevelUp, pendingAchievements, dismissAchievement } = useGame()
+  const { state, clearLevelUp, pendingAchievements, dismissAchievement, activeLevel } = useGame()
   const { mistakes, mistakeCounts } = state
 
   // Build a targeted system prompt based on weaknesses
@@ -37,7 +37,7 @@ export default function FocusPractice() {
       .map((m) => `"${m.original}" → "${m.corrected}" (${m.explanation})`)
       .join('\n')
 
-    return `You are a focused Italian language coach. The learner is at B1 level and you are specifically helping them work on their weak areas.
+    return `You are a focused Italian language coach. The learner is at ${activeLevel} level and you are specifically helping them work on their weak areas.
 
 IMPORTANT: You must respond with valid JSON only. No text before or after the JSON.
 

@@ -90,10 +90,11 @@ Respond with this exact JSON structure:
 }
 
 Rules:
-- Have a natural conversation in Italian
-- Use clear, well-articulated Italian since this is LISTENING practice
-- The user will hear your responses as audio, so speak naturally
-- Vary your vocabulary and sentence structures
+- Talk like a REAL Italian person — natural, everyday language, not a textbook
+- Use casual expressions and filler words (allora, tipo, cioè, senti, insomma, dai) naturally
+- Use clear pronunciation since this is LISTENING practice, but keep the language authentic
+- The user will hear your responses as audio, so speak like a friend would
+- Vary your topics: food stories, weekend plans, funny things that happened, opinions on movies, travel memories
 - Keep responses 2-3 sentences so they're easy to follow by ear`
 
 export default function ListeningPractice() {
