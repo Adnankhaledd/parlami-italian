@@ -30,6 +30,7 @@ const initialState = {
   dictationCount: 0,
   completedSentenceIds: [], // track which sentences have been done
   generatedSentences: [], // AI-generated sentences stored for reuse
+  wordLibrary: [], // [{word, translation, definition, exampleSentence, grammar, level, topic, encounters, mastered, addedDate}]
   // Onboarding
   onboardingComplete: false,
   learningGoals: [],
@@ -228,6 +229,38 @@ function gameReducer(state, action) {
         generatedSentences: [...state.generatedSentences, ...action.payload].slice(-500),
       }
     }
+    case 'ADD_WORD_TO_LIBRARY': {
+      const word = action.payload.word?.toLowerCase()
+      const existing = state.wordLibrary.findIndex(w => w.word?.toLowerCase() === word)
+      if (existing >= 0) {
+        // increment encounter count
+        const updated = [...state.wordLibrary]
+        updated[existing] = {
+          ...updated[existing],
+          encounters: (updated[existing].encounters || 1) + 1,
+          mastered: (updated[existing].encounters || 1) >= 6,
+          lastSeen: new Date().toISOString(),
+        }
+        return { ...state, wordLibrary: updated }
+      }
+      return {
+        ...state,
+        wordLibrary: [...state.wordLibrary, {
+          ...action.payload,
+          encounters: 1,
+          mastered: false,
+          addedDate: new Date().toISOString(),
+          lastSeen: new Date().toISOString(),
+        }],
+      }
+    }
+    case 'MARK_WORD_MASTERED': {
+      const idx = state.wordLibrary.findIndex(w => w.word?.toLowerCase() === action.payload?.toLowerCase())
+      if (idx < 0) return state
+      const updated = [...state.wordLibrary]
+      updated[idx] = { ...updated[idx], mastered: true }
+      return { ...state, wordLibrary: updated }
+    }
     case 'SET_ONBOARDING': {
       return {
         ...state,
@@ -356,6 +389,14 @@ export function GameProvider({ children }) {
     dispatch({ type: 'ADD_GENERATED_SENTENCES', payload: sentences })
   }, [])
 
+  const addWordToLibrary = useCallback((word) => {
+    dispatch({ type: 'ADD_WORD_TO_LIBRARY', payload: word })
+  }, [])
+
+  const markWordMastered = useCallback((word) => {
+    dispatch({ type: 'MARK_WORD_MASTERED', payload: word })
+  }, [])
+
   const setOnboarding = useCallback((data) => {
     dispatch({ type: 'SET_ONBOARDING', payload: data })
   }, [])
@@ -415,6 +456,8 @@ export function GameProvider({ children }) {
     incrementDictation,
     completeSentence,
     addGeneratedSentences,
+    addWordToLibrary,
+    markWordMastered,
     setOnboarding,
     setDailyProgress,
     addSessionHistory,

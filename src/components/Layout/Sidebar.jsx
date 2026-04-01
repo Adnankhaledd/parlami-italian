@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Home, BookOpen, MessageCircle, Headphones, Map, Video, PenTool, RefreshCw, Activity, Crosshair, GraduationCap, BarChart3, Flame, HelpCircle } from 'lucide-react'
+import { Home, BookOpen, MessageCircle, Headphones, Map, Video, PenTool, RefreshCw, Activity, Crosshair, GraduationCap, BarChart3, Flame, HelpCircle, Library } from 'lucide-react'
 import { useGame } from '../../contexts/GameContext'
 
 const navItems = [
@@ -8,6 +8,7 @@ const navItems = [
   { to: '/practice', icon: MessageCircle, label: 'Practice' },
   { to: '/qa', icon: HelpCircle, label: 'Q&A' },
   { to: '/listening', icon: Headphones, label: 'Listening' },
+  { to: '/words', icon: Library, label: 'Word Library' },
   { to: '/scenarios', icon: Map, label: 'Scenarios' },
   { to: '/videos', icon: Video, label: 'Videos' },
   { to: '/grammar', icon: PenTool, label: 'Grammar' },

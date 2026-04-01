@@ -30,6 +30,16 @@ export async function generateComprehensionQuestions({ passage, level = 'B1', qu
   return response.json()
 }
 
+export async function generateListeningPassage({ level = 'B1', topic = 'daily life', reviewWords = [] }) {
+  const response = await fetch(`${API_BASE}/listening-passage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ level, topic, reviewWords }),
+  })
+  if (!response.ok) throw new Error('Failed to generate passage')
+  return response.json()
+}
+
 export async function generateSentences({ difficulty, count = 10, exclude = [] }) {
   const systemPrompt = `Generate ${count} Italian sentences at difficulty level ${difficulty}/5.
 
