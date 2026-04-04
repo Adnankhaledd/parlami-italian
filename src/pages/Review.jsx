@@ -15,25 +15,28 @@ export default function Review() {
   const [sessionDone, setSessionDone] = useState(false)
 
   const dueItems = useMemo(() => getItemsDueForReview(state.reviewItems), [state.reviewItems])
-
-  const dueIndices = useMemo(() => {
-    return state.reviewItems
-      .map((item, idx) => ({ item, idx }))
-      .filter(({ item }) => item.nextReview <= new Date().toISOString().split('T')[0])
-      .map(({ idx }) => idx)
-  }, [state.reviewItems])
-
-  const currentDueIndex = dueIndices[currentIndex]
-  const currentItem = currentDueIndex !== undefined ? state.reviewItems[currentDueIndex] : null
   const nextReview = getNextReviewDate(state.reviewItems)
 
-  // Build the card for current item
-  const card = useMemo(() => {
-    if (!currentItem) return null
-    return buildReviewCard(currentItem)
-  }, [currentItem])
+  // Snapshot: freeze the session's items and cards at mount / restart
+  // so they don't shift when reviewItem() updates state mid-session
+  const [sessionCards, setSessionCards] = useState(() => buildSessionCards(state.reviewItems))
 
-  const category = currentItem ? getCategoryById(currentItem.category) : null
+  function buildSessionCards(reviewItems) {
+    const indices = reviewItems
+      .map((item, idx) => ({ item, idx }))
+      .filter(({ item }) => item.nextReview <= new Date().toISOString().split('T')[0])
+    return indices.map(({ item, idx }) => ({
+      globalIndex: idx,
+      item: { ...item },
+      card: buildReviewCard(item),
+      category: getCategoryById(item.category),
+    }))
+  }
+
+  const currentEntry = sessionCards[currentIndex]
+  const card = currentEntry?.card || null
+
+  const category = currentEntry?.category || null
 
   const handleSelect = (optionIndex) => {
     if (showResult) return
@@ -46,24 +49,21 @@ export default function Review() {
       total: prev.total + 1,
     }))
 
-    // Auto-determine quality: correct = Easy(2), wrong = Wrong(0)
+    // Update the item in state (this won't affect our snapshot)
     const quality = isCorrect ? 2 : 0
-    reviewItem(currentDueIndex, quality)
+    reviewItem(currentEntry.globalIndex, quality)
+  }
 
-    // Auto-advance after delay
-    setTimeout(() => {
-      if (currentIndex + 1 >= dueIndices.length) {
-        const finalCorrect = sessionStats.correct + (isCorrect ? 1 : 0)
-        const finalTotal = sessionStats.total + 1
-        const xp = finalCorrect * 5 + (finalCorrect === finalTotal ? 15 : 0)
-        if (xp > 0) addXP(xp)
-        setSessionDone(true)
-      } else {
-        setCurrentIndex((prev) => prev + 1)
-        setSelected(null)
-        setShowResult(false)
-      }
-    }, isCorrect ? 1200 : 2500) // Shorter delay for correct, longer for wrong to read explanation
+  const handleNext = () => {
+    if (currentIndex + 1 >= sessionCards.length) {
+      const xp = sessionStats.correct * 5 + (sessionStats.correct === sessionStats.total ? 15 : 0)
+      if (xp > 0) addXP(xp)
+      setSessionDone(true)
+    } else {
+      setCurrentIndex((prev) => prev + 1)
+      setSelected(null)
+      setShowResult(false)
+    }
   }
 
   const handleRestart = () => {
@@ -72,6 +72,7 @@ export default function Review() {
     setShowResult(false)
     setSessionStats({ correct: 0, total: 0 })
     setSessionDone(false)
+    setSessionCards(buildSessionCards(state.reviewItems))
   }
 
   return (
@@ -130,7 +131,7 @@ export default function Review() {
         <div className="max-w-xl mx-auto">
           {/* Progress */}
           <div className="flex items-center justify-between mb-4 text-sm text-navy-600">
-            <span>{currentIndex + 1} of {dueIndices.length}</span>
+            <span>{currentIndex + 1} of {sessionCards.length}</span>
             <span className="flex items-center gap-1">
               {category?.icon} {category?.name}
             </span>
@@ -203,8 +204,11 @@ export default function Review() {
                     </span>
                   </div>
                   {card.explanation && (
-                    <p className="text-xs text-navy-600">{card.explanation}</p>
+                    <p className="text-xs text-navy-600 mb-3">{card.explanation}</p>
                   )}
+                  <button onClick={handleNext} className="btn-primary w-full text-sm">
+                    {currentIndex + 1 >= sessionCards.length ? 'Finish Review' : 'Next Question'}
+                  </button>
                 </motion.div>
               )}
             </AnimatePresence>
