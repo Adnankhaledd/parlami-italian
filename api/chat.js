@@ -53,6 +53,7 @@ export default async function handler(req, res) {
 
     const result = {
       message: parsed.response || rawText,
+      correctedSentence: parsed.correctedSentence || '',
       corrections: parsed.corrections || [],
       vocabulary: parsed.vocabulary || [],
       encouragement: parsed.encouragement || '',

@@ -19,11 +19,12 @@ IMPORTANT: You must respond with valid JSON only. No text before or after the JS
 Respond with this exact JSON structure:
 {
   "response": "Your Italian response here (1-3 sentences, ${level} level)",
+  "correctedSentence": "The user's FULL sentence rewritten correctly in Italian (even if only one word was wrong, show the whole corrected sentence)",
   "corrections": [
     {
-      "original": "what the user said wrong",
-      "corrected": "the correct Italian",
-      "explanation": "Brief English explanation of the grammar/vocabulary rule",
+      "original": "what the user said wrong (the specific word or phrase)",
+      "corrected": "the correct Italian word or phrase",
+      "explanation": "Detailed English explanation: what grammar rule applies, what tense/form should have been used and WHY, with a brief example if helpful",
       "category": "one of: verb_conjugation, gender_agreement, articles, prepositions, word_order, vocabulary, pronouns, subjunctive, spelling, other"
     }
   ],
@@ -167,6 +168,7 @@ export default function ChatWindow({
         role: 'assistant',
         text: result.message,
         rawResponse: result.message,
+        correctedSentence: result.correctedSentence || '',
         corrections: result.corrections || [],
         encouragement: result.encouragement || '',
         vocabulary: result.vocabulary || [],
