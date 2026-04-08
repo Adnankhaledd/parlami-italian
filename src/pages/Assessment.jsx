@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { GraduationCap, Play, RotateCcw, CheckCircle2, Mic, Headphones, Clock, Target, ArrowRight } from 'lucide-react'
+import { GraduationCap, Play, RotateCcw, CheckCircle2, Mic, Headphones, Clock, Target, ArrowRight, TrendingUp, Activity } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import ChatWindow from '../components/Chat/ChatWindow'
 import { useGame } from '../contexts/GameContext'
@@ -85,11 +85,15 @@ const cefrDescriptions = {
 // CEFR levels in order for the progress path
 const CEFR_ORDER = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
 
+// CEFR → numeric score for progress calculations
+const levelScore = (lvl) => ({ A1: 1, A2: 2, B1: 3, B2: 4, C1: 5, C2: 6 })[lvl] || 0
+
 export default function Assessment() {
-  const { state, setAssessment } = useGame()
+  const { state, setAssessment, activeLevel } = useGame()
   const [started, setStarted] = useState(false)
   const [assessmentResult, setAssessmentResult] = useState(state.assessmentResult)
   const [showResult, setShowResult] = useState(!!state.assessmentResult)
+  const history = state.assessmentHistory || []
 
   const handleAssessment = useCallback((result) => {
     setAssessmentResult(result)
@@ -131,6 +135,22 @@ export default function Assessment() {
             <p className="text-navy-600">{cefrDescriptions[assessmentResult.level]}</p>
           </div>
 
+          {/* Active Level (live computed) */}
+          <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }} className="card border-olive/20 mb-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Activity size={16} className="text-olive" />
+                <div>
+                  <p className="text-xs text-navy-600">Your live level (updates with every practice)</p>
+                  <p className="text-cream font-semibold text-sm">Active Level</p>
+                </div>
+              </div>
+              <div className={`px-3 py-1.5 rounded-xl bg-gradient-to-br ${cefrColors[activeLevel] || cefrColors.B1}`}>
+                <span className="text-white font-bold text-lg">{activeLevel}</span>
+              </div>
+            </div>
+          </motion.div>
+
           {/* Speaking vs Listening */}
           {(assessmentResult.speaking || assessmentResult.listening) && (
             <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.4 }} className="grid grid-cols-2 gap-4 mb-6">
@@ -150,7 +170,7 @@ export default function Assessment() {
                 <div className="card border-blue-500/20">
                   <div className="flex items-center gap-2 mb-3">
                     <Headphones size={18} className="text-blue-400" />
-                    <h3 className="text-sm font-bold text-cream">Listening</h3>
+                    <h3 className="text-sm font-bold text-cream">Listening (Comprehension)</h3>
                   </div>
                   <div className={`text-2xl font-bold bg-gradient-to-r ${cefrColors[assessmentResult.listening.level] || cefrColors.B1} bg-clip-text text-transparent mb-2`}>
                     {assessmentResult.listening.level}
@@ -158,6 +178,79 @@ export default function Assessment() {
                   <p className="text-xs text-navy-600">{assessmentResult.listening.notes}</p>
                 </div>
               )}
+            </motion.div>
+          )}
+
+          {/* Progression over time */}
+          {history.length > 1 && (
+            <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.5 }} className="card mb-6 border-terracotta/20">
+              <div className="flex items-center gap-2 mb-4">
+                <TrendingUp size={16} className="text-terracotta" />
+                <h3 className="text-sm font-bold text-cream">Progression — Session by Session</h3>
+              </div>
+
+              {/* Session history table */}
+              <div className="space-y-2">
+                {history.slice().reverse().map((h, i) => {
+                  const isLatest = i === 0
+                  const prev = history[history.length - 2 - i]
+                  const speakingUp = prev && levelScore(h.speaking?.level) > levelScore(prev.speaking?.level)
+                  const listeningUp = prev && levelScore(h.listening?.level) > levelScore(prev.listening?.level)
+                  return (
+                    <div key={h.date + i} className={`flex items-center justify-between px-3 py-2 rounded-xl ${isLatest ? 'bg-terracotta/10 border border-terracotta/20' : 'bg-navy-800/40'}`}>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-navy-600 w-16">
+                          {h.date ? new Date(h.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—'}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <Mic size={12} className="text-terracotta" />
+                          <span className="text-sm text-cream font-medium">{h.speaking?.level || h.level || '—'}</span>
+                          {speakingUp && <span className="text-olive text-xs">↑</span>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Headphones size={12} className="text-blue-400" />
+                          <span className="text-sm text-cream font-medium">{h.listening?.level || h.level || '—'}</span>
+                          {listeningUp && <span className="text-olive text-xs">↑</span>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full bg-gradient-to-br ${cefrColors[h.level] || cefrColors.B1} text-white`}>
+                          {h.level}
+                        </span>
+                        {isLatest && <span className="text-[10px] text-terracotta font-semibold uppercase">Latest</span>}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Summary */}
+              {history.length >= 2 && (() => {
+                const first = history[0]
+                const last = history[history.length - 1]
+                const spkDelta = levelScore(last.speaking?.level) - levelScore(first.speaking?.level)
+                const lstDelta = levelScore(last.listening?.level) - levelScore(first.listening?.level)
+                return (
+                  <div className="mt-4 pt-4 border-t border-navy-700/30 grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <p className="text-navy-600">Speaking change</p>
+                      <p className="text-cream font-medium">
+                        {first.speaking?.level || '—'} → {last.speaking?.level || '—'}
+                        {spkDelta > 0 && <span className="text-olive ml-1">+{spkDelta}</span>}
+                        {spkDelta < 0 && <span className="text-coral ml-1">{spkDelta}</span>}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-navy-600">Listening change</p>
+                      <p className="text-cream font-medium">
+                        {first.listening?.level || '—'} → {last.listening?.level || '—'}
+                        {lstDelta > 0 && <span className="text-olive ml-1">+{lstDelta}</span>}
+                        {lstDelta < 0 && <span className="text-coral ml-1">{lstDelta}</span>}
+                      </p>
+                    </div>
+                  </div>
+                )
+              })()}
             </motion.div>
           )}
 

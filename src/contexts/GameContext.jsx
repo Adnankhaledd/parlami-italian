@@ -27,6 +27,7 @@ const initialState = {
   mistakes: [], // [{original, corrected, explanation, category, date, count}]
   mistakeCounts: {}, // {category: count} for quick lookup
   assessmentResult: null, // {level, breakdown, date, details}
+  assessmentHistory: [], // [{level, speaking, listening, date, ...}] — all past assessments
   reviewItems: [], // spaced repetition items
   dictationCount: 0,
   completedSentenceIds: [], // track which sentences have been done
@@ -170,12 +171,11 @@ function gameReducer(state, action) {
       }
     }
     case 'SET_ASSESSMENT': {
+      const dated = { ...action.payload, date: new Date().toISOString() }
       return {
         ...state,
-        assessmentResult: {
-          ...action.payload,
-          date: new Date().toISOString(),
-        },
+        assessmentResult: dated,
+        assessmentHistory: [...(state.assessmentHistory || []), dated].slice(-20),
       }
     }
     case 'ADD_PRACTICE_HISTORY': {
