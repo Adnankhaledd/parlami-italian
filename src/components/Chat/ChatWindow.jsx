@@ -168,6 +168,7 @@ export default function ChatWindow({
         role: 'assistant',
         text: result.message,
         rawResponse: result.message,
+        originalUserText: text,
         correctedSentence: result.correctedSentence || '',
         corrections: result.corrections || [],
         encouragement: result.encouragement || '',

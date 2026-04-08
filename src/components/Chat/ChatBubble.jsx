@@ -3,6 +3,68 @@ import { motion } from 'framer-motion'
 import { Volume2, VolumeX, Check, AlertCircle, Eye } from 'lucide-react'
 import CorrectionHighlight from './CorrectionHighlight'
 
+// Renders the user's original sentence with mistakes struck through in red
+// and the correct replacement shown inline in green.
+function renderSentenceWithCorrections(originalText, corrections) {
+  if (!originalText || !corrections || corrections.length === 0) {
+    return <span>{originalText}</span>
+  }
+
+  // Build a list of segments by finding each mistake in the original text
+  const segments = []
+  let cursor = 0
+  const lowerOriginal = originalText.toLowerCase()
+
+  // Sort corrections by their position in the original text
+  const positioned = corrections
+    .map((c) => ({
+      ...c,
+      pos: c.original ? lowerOriginal.indexOf(c.original.toLowerCase(), cursor) : -1,
+    }))
+    .filter((c) => c.pos >= 0)
+    .sort((a, b) => a.pos - b.pos)
+
+  for (const c of positioned) {
+    if (c.pos < cursor) continue // overlapping — skip
+    if (c.pos > cursor) {
+      segments.push({ type: 'text', content: originalText.slice(cursor, c.pos) })
+    }
+    segments.push({ type: 'wrong', content: originalText.slice(c.pos, c.pos + c.original.length) })
+    segments.push({ type: 'right', content: c.corrected })
+    cursor = c.pos + c.original.length
+  }
+  if (cursor < originalText.length) {
+    segments.push({ type: 'text', content: originalText.slice(cursor) })
+  }
+
+  // If nothing matched (e.g. corrections didn't align with text), fallback
+  if (segments.length === 0 || segments.every((s) => s.type === 'text')) {
+    return <span>{originalText}</span>
+  }
+
+  return (
+    <>
+      {segments.map((seg, i) => {
+        if (seg.type === 'wrong') {
+          return (
+            <span key={i} className="bg-red-500/15 text-red-400 line-through px-1 rounded">
+              {seg.content}
+            </span>
+          )
+        }
+        if (seg.type === 'right') {
+          return (
+            <span key={i} className="bg-olive/20 text-olive font-semibold px-1 rounded ml-1">
+              {seg.content}
+            </span>
+          )
+        }
+        return <span key={i}>{seg.content}</span>
+      })}
+    </>
+  )
+}
+
 export default function ChatBubble({ message, onSpeak, speaking, audioOnly = false }) {
   const isUser = message.role === 'user'
   const isAI = message.role === 'assistant'
@@ -60,6 +122,16 @@ export default function ChatBubble({ message, onSpeak, speaking, audioOnly = fal
         {/* Corrections panel */}
         {showText && message.corrections && message.corrections.length > 0 && (
           <div className="mt-3 pt-3 border-t border-navy-600/30">
+            {/* Inline diff: your sentence with mistakes crossed out and corrections in green */}
+            {message.originalUserText && (
+              <div className="bg-navy-800/40 border border-navy-700/40 rounded-lg px-3 py-2 mb-3">
+                <p className="text-xs text-navy-600 mb-1 font-medium">Your sentence, corrected:</p>
+                <p className="text-sm text-cream leading-relaxed">
+                  {renderSentenceWithCorrections(message.originalUserText, message.corrections)}
+                </p>
+              </div>
+            )}
+
             {/* Full corrected sentence */}
             {message.correctedSentence && (
               <div className="bg-olive/10 border border-olive/20 rounded-lg px-3 py-2 mb-3">
