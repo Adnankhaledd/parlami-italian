@@ -19,9 +19,13 @@ export default async function handler(req, res) {
       content: m.content || m.text || '',
     }))
 
+    // Detect assessment/long-response prompts and allocate more tokens
+    const isAssessment = /assessment|valutazione/i.test(systemPrompt || '')
+    const maxTokens = isAssessment ? 4096 : 2048
+
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
+      max_tokens: maxTokens,
       system: [
         {
           type: 'text',
@@ -36,15 +40,25 @@ export default async function handler(req, res) {
 
     let parsed
     try {
-      const jsonMatch = rawText.match(/\{[\s\S]*\}/)
+      // Strip markdown code fences if present (```json ... ```)
+      let cleaned = rawText
+        .replace(/^\s*```(?:json)?\s*/i, '')
+        .replace(/```\s*$/i, '')
+        .trim()
+
+      // Find the JSON object in the response
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
       if (jsonMatch) {
         parsed = JSON.parse(jsonMatch[0])
       } else {
         throw new Error('No JSON found')
       }
-    } catch {
+    } catch (err) {
+      console.warn('Chat JSON parse failed:', err.message, '— raw length:', rawText.length)
+      // Fall back: try to extract at least the response text
+      const responseMatch = rawText.match(/"response"\s*:\s*"([^"]*)"/)
       parsed = {
-        response: rawText,
+        response: responseMatch ? responseMatch[1] : rawText.slice(0, 500),
         corrections: [],
         vocabulary: [],
         encouragement: '',
