@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { GraduationCap, Play, RotateCcw, CheckCircle2, Mic, Headphones, Clock, Target, ArrowRight, TrendingUp, Activity } from 'lucide-react'
+import { GraduationCap, Play, RotateCcw, CheckCircle2, Mic, Headphones, Clock, Target, ArrowRight, TrendingUp, Activity, Upload, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import ChatWindow from '../components/Chat/ChatWindow'
 import { useGame } from '../contexts/GameContext'
@@ -93,7 +93,72 @@ export default function Assessment() {
   const [started, setStarted] = useState(false)
   const [assessmentResult, setAssessmentResult] = useState(state.assessmentResult)
   const [showResult, setShowResult] = useState(!!state.assessmentResult)
+  const [showImport, setShowImport] = useState(false)
+  const [importText, setImportText] = useState('')
+  const [importError, setImportError] = useState('')
   const history = state.assessmentHistory || []
+
+  // Import raw JSON/text from a previous assessment run
+  const handleImport = useCallback(() => {
+    setImportError('')
+    try {
+      // Strip code fences and find first JSON object
+      const cleaned = importText.replace(/```(?:json)?/gi, '').trim()
+      const match = cleaned.match(/\{[\s\S]*\}/)
+      if (!match) {
+        setImportError('Could not find JSON in the text. Paste the full chat response.')
+        return
+      }
+
+      let parsed
+      try {
+        parsed = JSON.parse(match[0])
+      } catch {
+        // Try to extract just the "assessment" object if outer JSON is truncated
+        const assessMatch = cleaned.match(/"assessment"\s*:\s*(\{)/)
+        if (assessMatch) {
+          // Greedy scan: find matching brace by counting
+          const start = assessMatch.index + assessMatch[0].length - 1
+          let depth = 0
+          let end = -1
+          let inStr = false
+          let escape = false
+          for (let i = start; i < cleaned.length; i++) {
+            const ch = cleaned[i]
+            if (escape) { escape = false; continue }
+            if (ch === '\\') { escape = true; continue }
+            if (ch === '"') inStr = !inStr
+            if (inStr) continue
+            if (ch === '{') depth++
+            else if (ch === '}') { depth--; if (depth === 0) { end = i; break } }
+          }
+          if (end > 0) {
+            try { parsed = { assessment: JSON.parse(cleaned.slice(start, end + 1)) } } catch {}
+          }
+        }
+      }
+
+      if (!parsed) {
+        setImportError('Could not parse the JSON. It may be too truncated to recover.')
+        return
+      }
+
+      const a = parsed.assessment || parsed
+      if (!a || !a.level) {
+        setImportError('No valid assessment found in the text.')
+        return
+      }
+
+      // Save via the game context (adds to history automatically)
+      setAssessment(a)
+      setAssessmentResult({ ...a, date: new Date().toISOString() })
+      setShowImport(false)
+      setImportText('')
+      setShowResult(true)
+    } catch (err) {
+      setImportError(err.message || 'Import failed')
+    }
+  }, [importText, setAssessment])
 
   const handleAssessment = useCallback((result) => {
     setAssessmentResult(result)
@@ -429,7 +494,69 @@ export default function Assessment() {
           <button onClick={() => setStarted(true)} className="btn-primary inline-flex items-center gap-2 text-lg px-8 py-4">
             <Play size={20} /> Start Assessment
           </button>
+
+          {/* Import option for recovering a previous run */}
+          <div className="mt-6">
+            <button
+              onClick={() => setShowImport(true)}
+              className="text-xs text-navy-600 hover:text-cream transition-colors inline-flex items-center gap-1.5"
+            >
+              <Upload size={12} />
+              Import from text (if an assessment didn't save)
+            </button>
+          </div>
         </div>
+
+        {/* Import modal */}
+        {showImport && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="fixed inset-0 bg-navy-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShowImport(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              className="card max-w-xl w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-bold text-cream">Import Assessment</h3>
+                <button onClick={() => setShowImport(false)} className="text-navy-600 hover:text-cream">
+                  <X size={18} />
+                </button>
+              </div>
+              <p className="text-xs text-navy-600 mb-3 leading-relaxed">
+                Paste the raw chat message that contains the assessment JSON. The app will parse it and save the result — even if the JSON got cut off.
+              </p>
+              <textarea
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
+                placeholder='Paste the full text here, e.g. { "response": "...", "assessment": { "level": "B1", ... } }'
+                className="w-full h-48 bg-navy-800 border border-navy-700/50 rounded-xl p-3 text-cream text-xs font-mono placeholder:text-navy-600 focus:outline-none focus:border-terracotta/50 resize-none"
+              />
+              {importError && (
+                <p className="text-xs text-coral mt-2">{importError}</p>
+              )}
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={() => setShowImport(false)}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-navy-800 text-navy-600 hover:text-cream text-sm font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleImport}
+                  disabled={!importText.trim()}
+                  className="flex-1 btn-primary text-sm disabled:opacity-50"
+                >
+                  Import
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
       </motion.div>
     )
   }
