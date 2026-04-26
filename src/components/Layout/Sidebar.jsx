@@ -1,9 +1,10 @@
 import { NavLink } from 'react-router-dom'
-import { Home, BookOpen, MessageCircle, Headphones, Map, Video, PenTool, RefreshCw, Activity, Crosshair, GraduationCap, BarChart3, Flame, HelpCircle, Library } from 'lucide-react'
+import { Home, BookOpen, MessageCircle, Headphones, Map, Video, PenTool, RefreshCw, Activity, Crosshair, GraduationCap, BarChart3, Flame, HelpCircle, Library, Mic } from 'lucide-react'
 import { useGame } from '../../contexts/GameContext'
 
 const navItems = [
   { to: '/', icon: Home, label: 'Home' },
+  { to: '/daily-practice', icon: Mic, label: 'Daily Practice' },
   { to: '/daily', icon: BookOpen, label: 'Daily Lesson', showDaily: true },
   { to: '/practice', icon: MessageCircle, label: 'Practice' },
   { to: '/qa', icon: HelpCircle, label: 'Q&A' },

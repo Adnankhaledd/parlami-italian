@@ -19,6 +19,7 @@ import GrammarLesson from './pages/GrammarLesson'
 import Videos from './pages/Videos'
 import QAPractice from './pages/QAPractice'
 import WordListening from './pages/WordListening'
+import DailyPractice from './pages/DailyPractice'
 
 function AppContent() {
   const { state } = useGame()
@@ -32,6 +33,7 @@ function AppContent() {
       <AnimatePresence mode="wait">
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/daily-practice" element={<DailyPractice />} />
           <Route path="/daily" element={<DailyLesson />} />
           <Route path="/practice" element={<Practice />} />
           <Route path="/qa" element={<QAPractice />} />
