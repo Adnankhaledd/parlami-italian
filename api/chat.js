@@ -21,7 +21,7 @@ export default async function handler(req, res) {
 
     // Detect assessment/long-response prompts and allocate more tokens
     const isAssessment = /assessment|valutazione/i.test(systemPrompt || '')
-    const maxTokens = isAssessment ? 4096 : 2048
+    const maxTokens = isAssessment ? 4096 : 3500
 
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
@@ -65,8 +65,26 @@ export default async function handler(req, res) {
       }
     }
 
+    // Strip markdown formatting that sometimes leaks into the response field.
+    // Chat bubbles render plain text, so headers/bold/lists just become noise.
+    const stripMarkdown = (text) => {
+      if (!text) return text
+      return text
+        .replace(/^#{1,6}\s+/gm, '')             // # headers
+        .replace(/\*\*([^*]+)\*\*/g, '$1')       // **bold**
+        .replace(/__([^_]+)__/g, '$1')           // __bold__
+        .replace(/(?<![*])\*([^*\n]+)\*(?![*])/g, '$1') // *italic*
+        .replace(/_([^_\n]+)_/g, '$1')           // _italic_
+        .replace(/`([^`]+)`/g, '$1')             // `code`
+        .replace(/^[-*+]\s+/gm, '')              // - bullets
+        .replace(/^\d+\.\s+/gm, '')              // 1. numbered lists
+        .replace(/^---+$/gm, '')                 // horizontal rules
+        .replace(/\n{3,}/g, '\n\n')              // collapse extra blank lines
+        .trim()
+    }
+
     const result = {
-      message: parsed.response || rawText,
+      message: stripMarkdown(parsed.response || rawText),
       correctedSentence: parsed.correctedSentence || '',
       corrections: parsed.corrections || [],
       vocabulary: parsed.vocabulary || [],
