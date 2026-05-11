@@ -11,63 +11,74 @@ import { generateSentences } from '../services/api'
 
 const DIFFICULTY_RATES = { 1: 0.7, 2: 0.8, 3: 0.9, 4: 1.0, 5: 1.1 }
 
-// Hook: infinite sentence pool with AI generation
-function useSentencePool(difficulty, batchSize = 10) {
-  const { state, completeSentence, addGeneratedSentences } = useGame()
-  const [generating, setGenerating] = useState(false)
-  const generatingRef = useRef(false)
+// Normalize sentence text for cross-session deduplication
+const normalizeText = (text) => (text || '').toLowerCase().trim().replace(/\s+/g, ' ').slice(0, 80)
 
-  // Combine hardcoded + AI-generated, filter out completed
-  const availableSentences = useMemo(() => {
-    const all = [
-      ...dictationSentences.filter(s => s.difficulty === difficulty),
-      ...state.generatedSentences.filter(s => s.difficulty === difficulty),
-    ]
-    // Give each sentence a stable ID
-    return all.map(s => ({
-      ...s,
-      id: s.id || `${s.text.slice(0, 40)}`,
-    })).filter(s => !state.completedSentenceIds.includes(s.id))
-  }, [difficulty, state.generatedSentences, state.completedSentenceIds])
+// Hook: every session pulls a fresh batch from the API.
+// Hardcoded sentences are only a fallback if the API fails entirely.
+function useFreshBatch(difficulty, count = 8) {
+  const { state, completeSentence } = useGame()
+  const [sentences, setSentences] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
 
-  // Prefetch more sentences when pool is running low
-  useEffect(() => {
-    if (availableSentences.length < 5 && !generatingRef.current) {
-      generatingRef.current = true
-      setGenerating(true)
-      const completedTexts = state.completedSentenceIds.slice(-20)
-      generateSentences({ difficulty, count: batchSize, exclude: completedTexts })
-        .then(newSentences => {
-          if (newSentences.length > 0) {
-            const withIds = newSentences.map(s => ({
-              ...s,
-              id: `ai_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-              difficulty,
-              generated: true,
-            }))
-            addGeneratedSentences(withIds)
-          }
-        })
-        .catch(err => console.error('Failed to generate sentences:', err))
-        .finally(() => {
-          setGenerating(false)
-          generatingRef.current = false
-        })
+  // Fetch a fresh batch from the API, excluding recent completions
+  const fetchBatch = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      // Recent completions to exclude: send the actual text so the AI knows
+      const recentTexts = (state.completedSentenceIds || []).slice(-30)
+      const newSentences = await generateSentences({
+        difficulty,
+        count,
+        exclude: recentTexts,
+      })
+
+      if (newSentences.length > 0) {
+        // Filter out anything that matches recently completed text (case-insensitive)
+        const completedSet = new Set(recentTexts.map(normalizeText))
+        const fresh = newSentences
+          .filter(s => !completedSet.has(normalizeText(s.text)))
+          .map(s => ({
+            ...s,
+            id: normalizeText(s.text),
+            difficulty,
+            generated: true,
+          }))
+
+        if (fresh.length > 0) {
+          setSentences(fresh)
+          return
+        }
+      }
+
+      // API returned nothing usable — fall back to unseen hardcoded sentences
+      throw new Error('AI returned no usable sentences')
+    } catch (err) {
+      console.error('Sentence batch fetch failed:', err.message)
+      setError(err.message)
+      const completedSet = new Set((state.completedSentenceIds || []).map(s => normalizeText(s)))
+      const fallback = dictationSentences
+        .filter(s => s.difficulty === difficulty)
+        .filter(s => !completedSet.has(normalizeText(s.text)))
+        .sort(() => Math.random() - 0.5)
+        .slice(0, count)
+        .map(s => ({ ...s, id: normalizeText(s.text) }))
+      setSentences(fallback)
+    } finally {
+      setLoading(false)
     }
-  }, [availableSentences.length, difficulty])
-
-  const getNextBatch = useCallback((count) => {
-    const shuffled = [...availableSentences].sort(() => Math.random() - 0.5)
-    return shuffled.slice(0, count)
-  }, [availableSentences])
+  }, [difficulty, count, state.completedSentenceIds])
 
   const markCompleted = useCallback((sentence) => {
-    if (sentence?.id) {
-      completeSentence(sentence.id)
+    if (sentence?.text) {
+      // Track by normalized text so dedup works across sessions, regardless of source
+      completeSentence(normalizeText(sentence.text))
     }
   }, [completeSentence])
 
-  return { availableSentences, getNextBatch, markCompleted, generating, totalPool: availableSentences.length }
+  return { sentences, loading, error, fetchBatch, markCompleted }
 }
 
 const LISTEN_SYSTEM_PROMPT = `You are a friendly Italian conversation partner for listening practice. Your name is Parlami.
@@ -229,21 +240,18 @@ function ShadowingMode({ onBack }) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [sessionStats, setSessionStats] = useState({ total: 0, totalAccuracy: 0 })
   const [sessionDone, setSessionDone] = useState(false)
-  const [sentences, setSentences] = useState([])
   const { addXP } = useGame()
-  const { getNextBatch, markCompleted, generating, totalPool } = useSentencePool(difficulty)
+  const { sentences, loading, error, fetchBatch, markCompleted } = useFreshBatch(difficulty, 8)
 
-  // Load a batch when difficulty changes or session restarts
+  // Auto-fetch a fresh batch on mount and whenever difficulty changes
   useEffect(() => {
-    const batch = getNextBatch(8)
-    setSentences(batch)
     setCurrentIndex(0)
     setSessionStats({ total: 0, totalAccuracy: 0 })
     setSessionDone(false)
-  }, [difficulty])
+    fetchBatch()
+  }, [difficulty]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleComplete = (accuracy) => {
-    // Mark this sentence as completed
     markCompleted(sentences[currentIndex])
 
     const newStats = {
@@ -263,11 +271,10 @@ function ShadowingMode({ onBack }) {
   }
 
   const handleNewSession = () => {
-    const batch = getNextBatch(8)
-    setSentences(batch)
     setCurrentIndex(0)
     setSessionStats({ total: 0, totalAccuracy: 0 })
     setSessionDone(false)
+    fetchBatch()
   }
 
   return (
@@ -275,7 +282,7 @@ function ShadowingMode({ onBack }) {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-cream">Shadowing</h1>
-          <p className="text-navy-600 text-sm">Listen and repeat out loud</p>
+          <p className="text-navy-600 text-sm">Listen and repeat out loud — fresh AI-generated sentences every session</p>
         </div>
         <button onClick={onBack} className="flex items-center gap-2 text-navy-600 hover:text-cream transition-colors text-sm">
           <ArrowLeft size={16} /> Back
@@ -290,17 +297,16 @@ function ShadowingMode({ onBack }) {
             {d}
           </button>
         ))}
-        <span className="text-xs text-navy-600 ml-auto">
-          {totalPool} sentences available
-          {generating && <Loader2 size={12} className="inline ml-1 animate-spin" />}
-        </span>
+        {error && (
+          <span className="text-xs text-coral ml-auto">Using offline fallback</span>
+        )}
       </div>
 
-      {generating && sentences.length === 0 ? (
+      {loading ? (
         <div className="card text-center py-12 max-w-xl mx-auto">
           <Loader2 size={32} className="text-terracotta mx-auto mb-3 animate-spin" />
-          <p className="text-cream">Generating new sentences...</p>
-          <p className="text-xs text-navy-600 mt-1">You've completed all the built-in ones!</p>
+          <p className="text-cream">Generating fresh sentences...</p>
+          <p className="text-xs text-navy-600 mt-1">Brand new ones, never repeated</p>
         </div>
       ) : sessionDone ? (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="card text-center py-12 max-w-xl mx-auto">
@@ -308,7 +314,7 @@ function ShadowingMode({ onBack }) {
           <h3 className="text-lg font-bold text-cream mb-4">Shadowing Complete!</h3>
           <p className="text-2xl font-bold text-olive mb-6">{Math.round(sessionStats.totalAccuracy / sessionStats.total)}% avg accuracy</p>
           <button onClick={handleNewSession} className="btn-primary inline-flex items-center gap-2">
-            <Sparkles size={16} /> New Sentences
+            <Sparkles size={16} /> Get Fresh Batch
           </button>
         </motion.div>
       ) : sentences[currentIndex] ? (
@@ -325,9 +331,10 @@ function ShadowingMode({ onBack }) {
       ) : (
         <div className="card text-center py-12 max-w-xl mx-auto">
           <Sparkles size={32} className="text-terracotta mx-auto mb-3" />
-          <p className="text-cream mb-2">All sentences completed at this level!</p>
-          <p className="text-xs text-navy-600 mb-4">New ones are being generated...</p>
-          <Loader2 size={20} className="text-terracotta mx-auto animate-spin" />
+          <p className="text-cream mb-3">No sentences loaded</p>
+          <button onClick={fetchBatch} className="btn-primary inline-flex items-center gap-2">
+            <Sparkles size={16} /> Generate Fresh Batch
+          </button>
         </div>
       )}
     </motion.div>
@@ -343,23 +350,21 @@ function DictationMode({ onBack }) {
   const [sessionDone, setSessionDone] = useState(false)
   const [hasPlayed, setHasPlayed] = useState(false)
   const [transcriptLevel, setTranscriptLevel] = useState(2) // 1=full, 2=italian only, 3=blurred, 4=hidden
-  const [sentences, setSentences] = useState([])
 
   const { speak, speaking, stopSpeaking } = useSpeechSynthesis()
   const { addXP, incrementDictation } = useGame()
-  const { getNextBatch, markCompleted, generating, totalPool } = useSentencePool(difficulty)
+  const { sentences, loading, error, fetchBatch, markCompleted } = useFreshBatch(difficulty, 10)
 
-  // Load batch on difficulty change
+  // Auto-fetch a fresh batch on mount and whenever difficulty changes
   useEffect(() => {
-    const batch = getNextBatch(10)
-    setSentences(batch)
     setCurrentIndex(0)
     setUserInput('')
     setResult(null)
     setSessionStats({ correct: 0, total: 0, totalAccuracy: 0 })
     setSessionDone(false)
     setHasPlayed(false)
-  }, [difficulty])
+    fetchBatch()
+  }, [difficulty]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const currentSentence = sentences[currentIndex]
   const rate = DIFFICULTY_RATES[difficulty]
@@ -399,14 +404,13 @@ function DictationMode({ onBack }) {
   }
 
   const handleRestart = () => {
-    const batch = getNextBatch(10)
-    setSentences(batch)
     setCurrentIndex(0)
     setUserInput('')
     setResult(null)
     setSessionStats({ correct: 0, total: 0, totalAccuracy: 0 })
     setSessionDone(false)
     setHasPlayed(false)
+    fetchBatch()
   }
 
   const handleKeyDown = (e) => {
@@ -456,10 +460,9 @@ function DictationMode({ onBack }) {
               {t}
             </button>
           ))}
-          <span className="text-xs text-navy-600 ml-auto">
-            {totalPool} available
-            {generating && <Loader2 size={12} className="inline ml-1 animate-spin" />}
-          </span>
+          {error && (
+            <span className="text-xs text-coral ml-auto">Using offline fallback</span>
+          )}
         </div>
       )}
 
@@ -488,21 +491,22 @@ function DictationMode({ onBack }) {
           </div>
           <button onClick={handleRestart} className="btn-primary inline-flex items-center gap-2">
             <Sparkles size={16} />
-            New Sentences
+            Get Fresh Batch
           </button>
         </motion.div>
       )}
 
       {/* Loading state */}
-      {generating && sentences.length === 0 && !sessionDone && (
+      {loading && !sessionDone && (
         <div className="card text-center py-12 max-w-xl mx-auto">
           <Loader2 size={32} className="text-terracotta mx-auto mb-3 animate-spin" />
-          <p className="text-cream">Generating new sentences...</p>
+          <p className="text-cream">Generating fresh sentences...</p>
+          <p className="text-xs text-navy-600 mt-1">Brand new ones, never repeated</p>
         </div>
       )}
 
       {/* Dictation card */}
-      {currentSentence && !sessionDone && (
+      {currentSentence && !sessionDone && !loading && (
         <div className="max-w-xl mx-auto">
           <div className="flex items-center justify-between mb-4 text-sm text-navy-600">
             <span>{currentIndex + 1} of {sentences.length}</span>
