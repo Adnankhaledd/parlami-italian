@@ -10,6 +10,29 @@ import { useGame } from '../../contexts/GameContext'
 import { sendMessage } from '../../services/api'
 import { applyColloquialMode } from '../../utils/colloquialPrompt'
 import { buildMistakeContext } from '../../utils/mistakeContext'
+import { STRUCTURE_BY_ID } from '../../data/structures'
+
+function buildMissionContext(mission) {
+  if (!mission || mission.completed) return ''
+  const today = new Date().toISOString().split('T')[0]
+  if (mission.date !== today) return ''
+
+  const struct = STRUCTURE_BY_ID[mission.structureId]
+  if (!struct) return ''
+
+  const remaining = Math.max(0, mission.target - mission.progress)
+  return `
+
+ACTIVE MISSION — STRUCTURE TARGET:
+The learner is working on ${struct.label} today. Target: ${mission.target} uses; remaining: ${remaining}.
+
+YOUR JOB: ask questions designed to ELICIT this structure naturally. Don't mention the mission directly — just steer the conversation so the user has clear opportunities to use it.
+
+Example questions that elicit ${struct.label}:
+${struct.elicitations.map(q => `- "${q}"`).join('\n')}
+
+When the user uses the structure correctly, briefly acknowledge it ("Bene, ottimo uso del ${struct.label.toLowerCase()}!") then continue. When they avoid it (paraphrase around it), gently push them: "Prova a dirlo usando ${struct.label.toLowerCase()}..."`
+}
 
 function getDefaultPrompt(level = 'B1') {
   return `You are a friendly Italian conversation partner helping a ${level}-level learner practice speaking. Your name is Parlami.
@@ -29,8 +52,25 @@ Respond with this exact JSON structure:
     }
   ],
   "vocabulary": ["new", "words", "used"],
-  "encouragement": "Brief encouraging comment in English (1 sentence)"
+  "encouragement": "Brief encouraging comment in English (1 sentence)",
+  "structuresUsed": ["array of structure IDs the user CORRECTLY used in this message — see STRUCTURE DETECTION below"]
 }
+
+STRUCTURE DETECTION:
+Analyze the user's message and list any of these advanced Italian structures they used CORRECTLY (not attempted-and-failed). Use these exact IDs:
+- "congiuntivo_presente" — present subjunctive (sia, abbia, faccia, vada)
+- "congiuntivo_imperfetto" — imperfect subjunctive (fossi, avessi, facessi, andasse)
+- "condizionale_presente" — present conditional (vorrei, mangerei, andrei, faresti)
+- "condizionale_passato" — past conditional (avrei voluto, sarei andato)
+- "periodo_ipotetico" — hypothetical (se + congiuntivo + condizionale: "se avessi tempo, viaggerei")
+- "ne_ci" — particles ne/ci used as pronouns (NOT ci as "us", but as "about it" or "there")
+- "clitici_doppi" — combined clitics (me lo, te la, gliene, ce ne)
+- "connettori_avanzati" — nonostante, sebbene, qualora, anziché, tuttavia, ammesso che, benché
+- "passato_remoto" — remote past (fui, andai, parlò, dissero)
+- "gerundio" — gerund (mangiando, essendo, pur facendo)
+- "imperativo" — imperative (vai!, dimmi!, non andare!, mi dica!)
+
+Only include structures that ACTUALLY appear in the user's message. Empty array if none. Be precise — don't include a structure unless you can point to the exact word/phrase.
 
 Correction categories explained:
 - verb_conjugation: wrong tense, wrong conjugation form
@@ -90,7 +130,7 @@ export default function ChatWindow({
 
   const { isListening, transcript, interimTranscript, start, stop, reset, supported: micSupported } = useSpeechRecognition()
   const { speak, speaking, stopSpeaking, supported: ttsSupported } = useSpeechSynthesis()
-  const { addXP, addMessage, addVocabulary, addMistakes, state: gameState, setColloquialMode, activeLevel } = useGame()
+  const { addXP, addMessage, addVocabulary, addMistakes, state: gameState, setColloquialMode, activeLevel, recordStructureUsage } = useGame()
 
   // Use provided prompt or generate default with active level
   const basePrompt = systemPrompt || getDefaultPrompt(activeLevel)
@@ -127,7 +167,7 @@ export default function ChatWindow({
           content: m.role === 'user' ? m.text : m.rawResponse || m.text,
         }))
 
-        const effectivePrompt = applyColloquialMode(basePrompt + buildMistakeContext(gameState), gameState.colloquialMode)
+        const effectivePrompt = applyColloquialMode(basePrompt + buildMistakeContext(gameState) + buildMissionContext(gameState.currentMission), gameState.colloquialMode)
 
         sendMessage({ messages: apiMessages, systemPrompt: effectivePrompt, scenario })
           .then((result) => {
@@ -166,7 +206,7 @@ export default function ChatWindow({
         content: m.role === 'user' ? m.text : m.rawResponse || m.text,
       }))
 
-      const effectivePrompt = applyColloquialMode(systemPrompt, gameState.colloquialMode)
+      const effectivePrompt = applyColloquialMode((basePrompt || systemPrompt) + buildMissionContext(gameState.currentMission), gameState.colloquialMode)
 
       const result = await sendMessage({
         messages: apiMessages,
@@ -184,6 +224,7 @@ export default function ChatWindow({
         corrections: result.corrections || [],
         encouragement: result.encouragement || '',
         vocabulary: result.vocabulary || [],
+        structuresUsed: result.structuresUsed || [],
         timestamp: Date.now(),
       }
 
@@ -197,12 +238,25 @@ export default function ChatWindow({
         xp += 25 // bonus for perfect sentence
       }
 
+      // Mission bonus: +5 XP per use of mission-target structure
+      const mission = gameState.currentMission
+      const today = new Date().toISOString().split('T')[0]
+      if (mission && mission.date === today && !mission.completed) {
+        const missionHits = (result.structuresUsed || []).filter(s => s === mission.structureId).length
+        if (missionHits > 0) xp += missionHits * 5
+      }
+
       addXP(xp)
       addMessage(isPerfect)
 
       if (result.vocabulary && result.vocabulary.length > 0) {
         addVocabulary(result.vocabulary)
         xp += result.vocabulary.length * 5
+      }
+
+      // Record structure usage for Plateau Breaker tracking
+      if (result.structuresUsed && result.structuresUsed.length > 0) {
+        recordStructureUsage(result.structuresUsed)
       }
 
       // Track mistakes with sentence context

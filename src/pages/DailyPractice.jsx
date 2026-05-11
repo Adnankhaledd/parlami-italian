@@ -10,6 +10,8 @@ import { sendMessage } from '../services/api'
 import useSpeechSynthesis from '../hooks/useSpeechSynthesis'
 import useSpeechRecognition from '../hooks/useSpeechRecognition'
 import { buildMistakeContext } from '../utils/mistakeContext'
+import { STRUCTURE_BY_ID } from '../data/structures'
+import MissionBadge from '../components/Gamification/MissionBadge'
 
 // Topics that rotate daily — feel like real conversations, not textbook exercises
 const CONVERSATION_STARTERS = [
@@ -34,6 +36,20 @@ function getDailyStarter() {
   // Pick a starter based on the date — so same starter all day, new one tomorrow
   const dayIndex = Math.floor(Date.now() / (1000 * 60 * 60 * 24))
   return CONVERSATION_STARTERS[dayIndex % CONVERSATION_STARTERS.length]
+}
+
+function buildMissionAddendum(mission) {
+  if (!mission || mission.completed) return ''
+  const today = new Date().toISOString().split('T')[0]
+  if (mission.date !== today) return ''
+  const struct = STRUCTURE_BY_ID[mission.structureId]
+  if (!struct) return ''
+  const remaining = Math.max(0, mission.target - mission.progress)
+  return `
+
+ACTIVE STRUCTURE MISSION: The learner is targeting ${struct.label} today (${remaining} uses left of ${mission.target}). Steer the conversation with questions that ELICIT this structure naturally — don't mention the mission, just create opportunities. Sample elicitation questions:
+${struct.elicitations.map(q => `- "${q}"`).join('\n')}
+When they correctly use the structure, briefly acknowledge it ("Bene, ottimo!") then continue. When they paraphrase around it, gently push: "Prova a usare ${struct.label.toLowerCase()}".`
 }
 
 function buildDailyPrompt(level, state) {
@@ -91,8 +107,25 @@ IMPORTANT: You must respond with valid JSON only.
   ],
   "vocabulary": ["useful_word_1", "useful_word_2"],
   "topicSuggestion": "If the conversation is dying, suggest a new topic direction here. Otherwise null.",
-  "encouragement": "Brief encouragement in English (1 sentence)"
+  "encouragement": "Brief encouragement in English (1 sentence)",
+  "structuresUsed": ["array of structure IDs the user CORRECTLY used in this message — see STRUCTURE DETECTION"]
 }
+
+STRUCTURE DETECTION:
+Analyze the user's message and list any of these advanced Italian structures they used CORRECTLY (not attempted-and-failed). Use these exact IDs:
+- "congiuntivo_presente" — present subjunctive (sia, abbia, faccia, vada)
+- "congiuntivo_imperfetto" — imperfect subjunctive (fossi, avessi, facessi, andasse)
+- "condizionale_presente" — present conditional (vorrei, mangerei, andrei)
+- "condizionale_passato" — past conditional (avrei voluto, sarei andato)
+- "periodo_ipotetico" — hypothetical (se + congiuntivo + condizionale)
+- "ne_ci" — particles ne/ci (NOT "us", but as "about it"/"there")
+- "clitici_doppi" — combined clitics (me lo, gliene, ce ne)
+- "connettori_avanzati" — nonostante, sebbene, qualora, anziché, tuttavia, benché
+- "passato_remoto" — remote past (fui, andai, parlò)
+- "gerundio" — gerund (mangiando, essendo, pur facendo)
+- "imperativo" — imperative forms
+
+Only include structures the user ACTUALLY used. Empty array if none.
 
 LEARNER CONTEXT:
 - Level: ${level}
@@ -112,7 +145,7 @@ CONVERSATION RULES:
 }
 
 export default function DailyPractice() {
-  const { state, addXP, addMessage, addMistakes, addVocabulary, activeLevel } = useGame()
+  const { state, addXP, addMessage, addMistakes, addVocabulary, activeLevel, recordStructureUsage } = useGame()
   const [messages, setMessages] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -128,7 +161,10 @@ export default function DailyPractice() {
   const messagesEndRef = useRef(null)
   const timerRef = useRef(null)
 
-  const systemPrompt = useMemo(() => buildDailyPrompt(activeLevel, state), [activeLevel, state.mistakeCounts, state.assessmentResult])
+  const systemPrompt = useMemo(
+    () => buildDailyPrompt(activeLevel, state) + buildMissionAddendum(state.currentMission),
+    [activeLevel, state.mistakeCounts, state.assessmentResult, state.currentMission]
+  )
 
   // Timer
   useEffect(() => {
@@ -218,6 +254,7 @@ export default function DailyPractice() {
 
       const corrections = result.corrections || []
       const isPerfect = corrections.length === 0
+      const structuresUsed = result.structuresUsed || []
 
       const aiMessage = {
         role: 'assistant',
@@ -227,6 +264,7 @@ export default function DailyPractice() {
         corrections,
         encouragement: result.encouragement || '',
         vocabulary: result.vocabulary || [],
+        structuresUsed,
         revealed: false,
         timestamp: Date.now(),
       }
@@ -241,11 +279,24 @@ export default function DailyPractice() {
       }))
 
       // Gamification
-      addXP(isPerfect ? 15 : 10)
+      let xp = isPerfect ? 15 : 10
+      // Mission bonus: +5 XP per use of mission-target structure
+      const mission = state.currentMission
+      const today = new Date().toISOString().split('T')[0]
+      if (mission && mission.date === today && !mission.completed) {
+        const hits = structuresUsed.filter(s => s === mission.structureId).length
+        if (hits > 0) xp += hits * 5
+      }
+      addXP(xp)
       addMessage(isPerfect)
+
       if (result.vocabulary?.length > 0) addVocabulary(result.vocabulary)
       if (corrections.length > 0) {
         addMistakes(corrections.map(c => ({ ...c, sentenceContext: text })))
+      }
+      // Record structure usage for Plateau Breaker
+      if (structuresUsed.length > 0) {
+        recordStructureUsage(structuresUsed)
       }
 
       // Speak the AI's response
@@ -255,7 +306,7 @@ export default function DailyPractice() {
     } finally {
       setIsLoading(false)
     }
-  }, [messages, isLoading, transcript, systemPrompt, speak, addXP, addMessage, addVocabulary, addMistakes, reset])
+  }, [messages, isLoading, transcript, systemPrompt, speak, addXP, addMessage, addVocabulary, addMistakes, reset, recordStructureUsage, state.currentMission])
 
   const handleMicStop = () => {
     stop()
@@ -308,8 +359,75 @@ export default function DailyPractice() {
     const avgAccuracy = sessionStats.exchanges > 0
       ? Math.round(((sessionStats.exchanges - sessionStats.corrections) / sessionStats.exchanges) * 100)
       : 100
+
+    // Tally structures the user used in this session
+    const sessionStructures = messages
+      .filter(m => m.role === 'assistant')
+      .flatMap(m => m.structuresUsed || [])
+    const structureCounts = sessionStructures.reduce((acc, s) => {
+      acc[s] = (acc[s] || 0) + 1
+      return acc
+    }, {})
+    const structuresList = Object.entries(structureCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([id, count]) => ({ struct: STRUCTURE_BY_ID[id], count }))
+      .filter(x => x.struct)
+
+    // Encore: restart the same conversation but with intensified instructions
+    const handleEncore = async () => {
+      const newMessages = []
+      setMessages(newMessages)
+      setSessionStats({ exchanges: 0, corrections: 0, perfectCount: 0 })
+      setShowSummary(false)
+
+      // Reuse the same starter, but tell the AI to push harder this round
+      const previousTopics = messages
+        .filter(m => m.role === 'assistant')
+        .map(m => m.text)
+        .join(' ')
+        .slice(0, 300)
+
+      setIsLoading(true)
+      try {
+        const encorePrompt = systemPrompt + `
+
+ENCORE MODE — TASK REPETITION:
+The learner just finished a session and chose to redo it. They are practicing the same conversation a second time. Your goals this round:
+- Push for HIGHER complexity than last time
+- Force the structures they avoided in the previous session
+- Speak slightly faster and use more idiomatic expressions
+- If they paraphrase around an advanced structure, prompt them to retry: "Prova a dirlo usando il congiuntivo / condizionale / ne / ci..."
+- Don't accept simpler reformulations of structures they previously dodged
+Previous conversation summary: ${previousTopics}`
+
+        const result = await sendMessage({
+          messages: [{ role: 'user', content: 'Iniziamo di nuovo la conversazione, ma questa volta più intensa.' }],
+          systemPrompt: encorePrompt,
+        })
+
+        const aiMessage = {
+          role: 'assistant',
+          text: result.message,
+          correctedSentence: '',
+          corrections: [],
+          encouragement: result.encouragement || '',
+          vocabulary: result.vocabulary || [],
+          structuresUsed: result.structuresUsed || [],
+          revealed: false,
+          timestamp: Date.now(),
+          isEncoreOpener: true,
+        }
+        setMessages([aiMessage])
+        speak(result.message, 0.95) // slightly faster
+      } catch (err) {
+        setError(err.message)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
     return (
-      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="max-w-md mx-auto text-center py-12">
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="max-w-md mx-auto text-center py-8">
         <Trophy size={48} className="text-yellow-400 mx-auto mb-4" />
         <h2 className="text-2xl font-bold text-cream mb-2">Session Complete!</h2>
         <p className="text-navy-600 mb-6">You practiced for {formatTime(elapsed)}</p>
@@ -329,10 +447,31 @@ export default function DailyPractice() {
           </div>
         </div>
 
-        <button onClick={() => { setSessionStarted(false); setMessages([]); setElapsed(0); setSessionStats({ exchanges: 0, corrections: 0, perfectCount: 0 }); setShowSummary(false) }}
-          className="btn-primary inline-flex items-center gap-2">
-          <RefreshCw size={16} /> New Session
-        </button>
+        {/* Structures used this session */}
+        {structuresList.length > 0 && (
+          <div className="card text-left mb-6">
+            <p className="text-xs font-bold uppercase tracking-wide text-navy-600 mb-2">Advanced structures you used</p>
+            <div className="flex flex-wrap gap-1.5">
+              {structuresList.map(({ struct, count }) => (
+                <span key={struct.id} className="text-xs bg-olive/10 text-olive px-2 py-1 rounded-lg font-medium">
+                  {struct.label} <span className="text-olive/60">×{count}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-2">
+          {sessionStats.exchanges >= 2 && (
+            <button onClick={handleEncore} className="btn-primary inline-flex items-center justify-center gap-2 bg-gradient-to-br from-coral to-terracotta">
+              <Trophy size={16} /> Encore — Same conversation, harder
+            </button>
+          )}
+          <button onClick={() => { setSessionStarted(false); setMessages([]); setElapsed(0); setSessionStats({ exchanges: 0, corrections: 0, perfectCount: 0 }); setShowSummary(false) }}
+            className="py-2 px-4 rounded-xl bg-navy-800 hover:bg-navy-700 text-cream text-sm transition-colors inline-flex items-center justify-center gap-2">
+            <RefreshCw size={16} /> New Session
+          </button>
+        </div>
       </motion.div>
     )
   }
@@ -341,12 +480,16 @@ export default function DailyPractice() {
   return (
     <div className="flex flex-col h-[calc(100vh-120px)]">
       {/* Header bar */}
-      <div className="flex items-center justify-between px-2 mb-3">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between px-2 mb-3 gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           <h1 className="text-lg font-bold text-cream">Daily Practice</h1>
           <span className="text-xs text-navy-600 bg-navy-800 px-2 py-0.5 rounded-full">{activeLevel}</span>
         </div>
-        <div className="flex items-center gap-3">
+        {/* Mission progress in the middle */}
+        <div className="flex-1 min-w-0 max-w-xs">
+          <MissionBadge />
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
           <div className="flex items-center gap-1.5 text-sm">
             <Clock size={14} className="text-navy-600" />
             <span className="font-mono text-cream">{formatTime(elapsed)}</span>

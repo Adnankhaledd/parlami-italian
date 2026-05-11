@@ -47,6 +47,10 @@ const initialState = {
   grammarLessonsCompleted: 0,
   videosWatched: 0,
   dailyLessonsCompleted: 0,
+  // Plateau Breaker — structure missions
+  structureUsage: {}, // { 'YYYY-MM-DD': { structureId: count, ... } }
+  currentMission: null, // { date, structureId, target, progress, completed, completedAt }
+  missionHistory: [], // [{ date, structureId, target, finalProgress, completed }]
 }
 
 function gameReducer(state, action) {
@@ -298,6 +302,82 @@ function gameReducer(state, action) {
       updated[idx] = { ...updated[idx], mastered: true, correctQuizzes: 5 }
       return { ...state, wordLibrary: updated }
     }
+    case 'RECORD_STRUCTURE_USAGE': {
+      // payload: array of structure IDs detected in user's message
+      const structureIds = action.payload || []
+      if (structureIds.length === 0) return state
+
+      const today = new Date().toISOString().split('T')[0]
+      const todayUsage = { ...(state.structureUsage[today] || {}) }
+      for (const sid of structureIds) {
+        todayUsage[sid] = (todayUsage[sid] || 0) + 1
+      }
+
+      // Update mission progress if today's mission targets one of these structures
+      let mission = state.currentMission
+      if (mission && mission.date === today && !mission.completed) {
+        const hits = structureIds.filter(sid => sid === mission.structureId).length
+        if (hits > 0) {
+          const newProgress = mission.progress + hits
+          const completed = newProgress >= mission.target
+          mission = {
+            ...mission,
+            progress: newProgress,
+            completed,
+            completedAt: completed ? new Date().toISOString() : null,
+          }
+        }
+      }
+
+      // Trim old usage data (keep last 60 days)
+      const allDates = Object.keys(state.structureUsage).sort()
+      const trimmed = { ...state.structureUsage, [today]: todayUsage }
+      if (allDates.length > 60) {
+        for (const oldDate of allDates.slice(0, allDates.length - 60)) {
+          delete trimmed[oldDate]
+        }
+      }
+
+      return { ...state, structureUsage: trimmed, currentMission: mission }
+    }
+    case 'SET_DAILY_MISSION': {
+      // payload: { structureId, target }
+      const today = new Date().toISOString().split('T')[0]
+      const newMission = {
+        date: today,
+        structureId: action.payload.structureId,
+        target: action.payload.target || 5,
+        progress: 0,
+        completed: false,
+        completedAt: null,
+      }
+      // Archive previous mission if it was for a different day
+      let history = state.missionHistory || []
+      if (state.currentMission && state.currentMission.date !== today) {
+        history = [...history, {
+          date: state.currentMission.date,
+          structureId: state.currentMission.structureId,
+          target: state.currentMission.target,
+          finalProgress: state.currentMission.progress,
+          completed: state.currentMission.completed,
+        }].slice(-60)
+      }
+      return { ...state, currentMission: newMission, missionHistory: history }
+    }
+    case 'SKIP_MISSION': {
+      // Same day, swap to a different structure
+      if (!state.currentMission) return state
+      return {
+        ...state,
+        currentMission: {
+          ...state.currentMission,
+          structureId: action.payload,
+          progress: 0,
+          completed: false,
+          completedAt: null,
+        },
+      }
+    }
     case 'SET_ONBOARDING': {
       return {
         ...state,
@@ -446,6 +526,18 @@ export function GameProvider({ children }) {
     dispatch({ type: 'MARK_WORD_MASTERED', payload: word })
   }, [])
 
+  const recordStructureUsage = useCallback((structureIds) => {
+    dispatch({ type: 'RECORD_STRUCTURE_USAGE', payload: structureIds })
+  }, [])
+
+  const setDailyMission = useCallback((structureId, target = 5) => {
+    dispatch({ type: 'SET_DAILY_MISSION', payload: { structureId, target } })
+  }, [])
+
+  const skipMission = useCallback((newStructureId) => {
+    dispatch({ type: 'SKIP_MISSION', payload: newStructureId })
+  }, [])
+
   const setOnboarding = useCallback((data) => {
     dispatch({ type: 'SET_ONBOARDING', payload: data })
   }, [])
@@ -517,6 +609,9 @@ export function GameProvider({ children }) {
     quizWordCorrect,
     quizWordWrong,
     markWordMastered,
+    recordStructureUsage,
+    setDailyMission,
+    skipMission,
     setOnboarding,
     setDailyProgress,
     addSessionHistory,

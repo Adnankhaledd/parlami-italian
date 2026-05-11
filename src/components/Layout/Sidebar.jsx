@@ -1,9 +1,10 @@
 import { NavLink } from 'react-router-dom'
-import { Home, BookOpen, MessageCircle, Headphones, Map, Video, PenTool, RefreshCw, Activity, Crosshair, GraduationCap, BarChart3, Flame, HelpCircle, Library, Mic } from 'lucide-react'
+import { Home, BookOpen, MessageCircle, Headphones, Map, Video, PenTool, RefreshCw, Activity, Crosshair, GraduationCap, BarChart3, Flame, HelpCircle, Library, Mic, Target } from 'lucide-react'
 import { useGame } from '../../contexts/GameContext'
 
 const navItems = [
   { to: '/', icon: Home, label: 'Home' },
+  { to: '/missions', icon: Target, label: 'Missions', showMission: true },
   { to: '/daily-practice', icon: Mic, label: 'Daily Practice' },
   { to: '/daily', icon: BookOpen, label: 'Daily Lesson', showDaily: true },
   { to: '/practice', icon: MessageCircle, label: 'Practice' },
@@ -43,36 +44,54 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 p-2 lg:p-3 space-y-0.5 overflow-y-auto">
-        {navItems.map(({ to, icon: Icon, label, showBadge, showDaily }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={to === '/'}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 group ${
-                isActive
-                  ? 'bg-terracotta/10 text-terracotta'
-                  : 'text-navy-600 hover:text-cream hover:bg-navy-700/50'
-              }`
-            }
-          >
-            <div className="relative shrink-0 mx-auto lg:mx-0">
-              <Icon size={18} />
-              {showBadge && reviewDueCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-coral text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
-                  {reviewDueCount > 9 ? '9+' : reviewDueCount}
-                </span>
-              )}
-              {showDaily && !dailyDone && (
-                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-terracotta rounded-full" />
-              )}
-              {showDaily && dailyDone && (
-                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-olive rounded-full" />
-              )}
-            </div>
-            <span className="hidden lg:block font-medium text-xs">{label}</span>
-          </NavLink>
-        ))}
+        {navItems.map(({ to, icon: Icon, label, showBadge, showDaily, showMission }) => {
+          const mission = state.currentMission
+          const missionIsToday = mission && mission.date === today
+          const missionDone = missionIsToday && mission.completed
+          const missionPending = missionIsToday && !mission.completed
+          const missionMissing = !missionIsToday
+          return (
+            <NavLink
+              key={to}
+              to={to}
+              end={to === '/'}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 group ${
+                  isActive
+                    ? 'bg-terracotta/10 text-terracotta'
+                    : 'text-navy-600 hover:text-cream hover:bg-navy-700/50'
+                }`
+              }
+            >
+              <div className="relative shrink-0 mx-auto lg:mx-0">
+                <Icon size={18} />
+                {showBadge && reviewDueCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 bg-coral text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                    {reviewDueCount > 9 ? '9+' : reviewDueCount}
+                  </span>
+                )}
+                {showDaily && !dailyDone && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-terracotta rounded-full" />
+                )}
+                {showDaily && dailyDone && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-olive rounded-full" />
+                )}
+                {showMission && missionPending && (
+                  <span className="absolute -top-1.5 -right-1.5 bg-terracotta text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                    {Math.max(0, mission.target - mission.progress)}
+                  </span>
+                )}
+                {showMission && missionDone && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-olive rounded-full" />
+                )}
+                {showMission && missionMissing && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-terracotta rounded-full animate-pulse" />
+                )}
+              </div>
+              <span className="hidden lg:block font-medium text-xs">{label}</span>
+            </NavLink>
+          )
+        })}
       </nav>
 
       {/* Streak Badge */}

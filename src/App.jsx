@@ -20,6 +20,7 @@ import Videos from './pages/Videos'
 import QAPractice from './pages/QAPractice'
 import WordListening from './pages/WordListening'
 import DailyPractice from './pages/DailyPractice'
+import Missions from './pages/Missions'
 
 function AppContent() {
   const { state } = useGame()
@@ -34,6 +35,7 @@ function AppContent() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/daily-practice" element={<DailyPractice />} />
+          <Route path="/missions" element={<Missions />} />
           <Route path="/daily" element={<DailyLesson />} />
           <Route path="/practice" element={<Practice />} />
           <Route path="/qa" element={<QAPractice />} />

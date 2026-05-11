@@ -89,6 +89,7 @@ export default async function handler(req, res) {
       corrections: parsed.corrections || [],
       vocabulary: parsed.vocabulary || [],
       encouragement: parsed.encouragement || '',
+      structuresUsed: parsed.structuresUsed || [],
     }
 
     if (parsed.assessment) {
