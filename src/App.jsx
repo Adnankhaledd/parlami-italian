@@ -21,6 +21,7 @@ import QAPractice from './pages/QAPractice'
 import WordListening from './pages/WordListening'
 import DailyPractice from './pages/DailyPractice'
 import Missions from './pages/Missions'
+import MissionPractice from './pages/MissionPractice'
 
 function AppContent() {
   const { state } = useGame()
@@ -36,6 +37,7 @@ function AppContent() {
           <Route path="/" element={<Home />} />
           <Route path="/daily-practice" element={<DailyPractice />} />
           <Route path="/missions" element={<Missions />} />
+          <Route path="/missions/practice" element={<MissionPractice />} />
           <Route path="/daily" element={<DailyLesson />} />
           <Route path="/practice" element={<Practice />} />
           <Route path="/qa" element={<QAPractice />} />

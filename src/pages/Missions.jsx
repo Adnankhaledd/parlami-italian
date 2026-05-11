@@ -235,21 +235,29 @@ function ActiveMissionCard({ mission, structure, onSkip }) {
       </div>
 
       {/* Action */}
-      <div className="flex gap-2">
+      <div className="space-y-2">
         <Link
-          to="/daily"
-          className="flex-1 btn-primary inline-flex items-center justify-center gap-2 text-sm"
+          to="/missions/practice"
+          className="btn-primary w-full inline-flex items-center justify-center gap-2 text-sm"
         >
           <Zap size={16} />
-          {mission.completed ? 'Practice anyway' : `Use it ${remaining} more time${remaining !== 1 ? 's' : ''}`}
+          {mission.completed ? 'Practice this structure again' : 'Start 5-question drill'}
         </Link>
-        <button
-          onClick={() => setShowSkip(!showSkip)}
-          className="px-3 rounded-xl bg-navy-800 hover:bg-navy-700 text-navy-600 hover:text-cream text-sm transition-colors"
-          title="Pick a different structure"
-        >
-          <RefreshCw size={14} />
-        </button>
+        <div className="flex gap-2">
+          <Link
+            to="/daily-practice"
+            className="flex-1 inline-flex items-center justify-center gap-2 text-xs py-2 rounded-xl bg-navy-800 hover:bg-navy-700 text-cream transition-colors"
+          >
+            Or use it in conversation
+          </Link>
+          <button
+            onClick={() => setShowSkip(!showSkip)}
+            className="px-3 rounded-xl bg-navy-800 hover:bg-navy-700 text-navy-600 hover:text-cream text-xs transition-colors"
+            title="Pick a different structure"
+          >
+            <RefreshCw size={14} />
+          </button>
+        </div>
       </div>
 
       <AnimatePresence>
