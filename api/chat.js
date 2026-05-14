@@ -83,10 +83,34 @@ export default async function handler(req, res) {
         .trim()
     }
 
+    // Consistency safety net: voice response and corrections array must agree.
+    // If the AI said "Perfetto!" but populated corrections (or said "Aspetta..."
+    // but corrections is empty), prefer the analytical signal.
+    let voiceMessage = stripMarkdown(parsed.response || rawText)
+    const corrections = parsed.corrections || []
+    const hasCorrections = corrections.length > 0
+
+    const PRAISE_PATTERN = /^\s*(perfett[oi]!?|brav[oa]!?|bene\s+detto!?|esatt[oa]!?|ottim[oa]!?|tutto\s+giusto!?|complimenti!?)/i
+    const CORRECTION_PATTERN = /(aspetta|si\s+dice|invece\s+di|non\s+è|piccola\s+cosa|meglio\s+dire|attenzione)/i
+
+    const startsWithPraise = PRAISE_PATTERN.test(voiceMessage)
+    const mentionsCorrection = CORRECTION_PATTERN.test(voiceMessage)
+
+    if (hasCorrections && startsWithPraise && !mentionsCorrection) {
+      // AI praised but had corrections — prepend a correction note
+      const first = corrections[0]
+      const noteIt = `Aspetta, si dice "${first.corrected}" non "${first.original}". `
+      voiceMessage = noteIt + voiceMessage.replace(PRAISE_PATTERN, '').trim()
+    } else if (!hasCorrections && mentionsCorrection && !startsWithPraise) {
+      // AI mentioned correction but corrections array is empty — clean it up
+      // Strip the leading correction phrase up to the first sentence break
+      voiceMessage = voiceMessage.replace(/^[^.!?]*[.!?]\s*/, '').trim() || voiceMessage
+    }
+
     const result = {
-      message: stripMarkdown(parsed.response || rawText),
+      message: voiceMessage,
       correctedSentence: parsed.correctedSentence || '',
-      corrections: parsed.corrections || [],
+      corrections,
       vocabulary: parsed.vocabulary || [],
       encouragement: parsed.encouragement || '',
       structuresUsed: parsed.structuresUsed || [],
