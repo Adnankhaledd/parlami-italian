@@ -16,34 +16,59 @@ const TOTAL_QUESTIONS = 5
 function buildDrillPrompt(structure, level) {
   return `You are running a focused mini-lesson drill on Italian ${structure.label}.
 
-Your job each turn:
-1. Read the user's reply
-2. Score whether they CORRECTLY used the target structure (${structure.label})
-3. Give brief feedback in Italian + the correct version if they didn't use it
-4. Be encouraging — this is practice, mistakes are fine
-
 The user is at ${level} level. Speak natural conversational Italian.
 
-DEFINITIONS — what counts as using ${structure.label}:
+DEFINITION — what ${structure.label} is:
 ${structure.description}
 
 Examples of CORRECT use:
 ${structure.examples.map(ex => `- ${ex}`).join('\n')}
 
+═══ HOW TO SCORE (read carefully) ═══
+
+The ONLY thing being tested in this drill is whether the user correctly produced
+the TARGET STRUCTURE: ${structure.label}.
+
+Set "usedCorrectly": true if the user correctly formed and used ${structure.label}
+in their reply — EVEN IF there are OTHER unrelated mistakes elsewhere in the
+sentence (a wrong article, a different verb tense in another clause, a typo, a
+gender error, etc.). Those other mistakes do NOT make usedCorrectly false. You
+still mention them in feedback/correctVersion, but the drill credit is ONLY for
+the target structure.
+
+Set "usedCorrectly": false ONLY if:
+- They avoided ${structure.label} entirely (paraphrased around it / never produced it), OR
+- They attempted ${structure.label} itself but conjugated/formed THAT structure wrong
+
+Example for a "Congiuntivo imperfetto" drill:
+- "Se fossi presidente, cambierai le tasse" → "fossi" IS correct congiuntivo
+  imperfetto → usedCorrectly: TRUE. ("cambierai" should be "cambierei" — that's a
+  conditional error in the main clause, mention it in feedback, but it does NOT
+  fail the drill because the TARGET structure was used correctly.)
+- "Se sono presidente, cambio le tasse" → no congiuntivo imperfetto at all →
+  usedCorrectly: FALSE.
+- "Se fosse presidente..." when talking about themselves (should be "fossi") →
+  attempted the target but wrong form → usedCorrectly: FALSE.
+
+═══ CONSISTENCY RULES (must follow) ═══
+- "feedback" MUST agree with "usedCorrectly". Never say "Bene! Hai usato
+  correttamente X" while usedCorrectly is false. Never say "non hai usato X"
+  while usedCorrectly is true.
+- "correctVersion" must be FULLY correct, natural Italian that fixes EVERY error
+  in the user's sentence (not just the target structure). If their sentence was
+  already perfect, return empty string. Double-check it is genuinely correct
+  before returning it — do not output a "correct version" that still contains
+  the original error.
+
 You must respond with ONLY this JSON:
 {
-  "feedback": "Brief Italian feedback (1-2 sentences) — encouraging, points out what worked or what to fix",
+  "feedback": "Brief Italian feedback (1-2 sentences). If usedCorrectly is true, praise the target structure use, then optionally note any OTHER error. If false, explain what was missing.",
   "usedCorrectly": true | false,
-  "correctVersion": "If they didn't use the target structure correctly, rewrite their reply using ${structure.label}. Otherwise empty string.",
-  "tip": "One short tip in English about the structure (only if they got it wrong, otherwise empty string)"
+  "correctVersion": "Fully corrected, natural version of their sentence (fixing ALL errors). Empty string only if their sentence was already flawless.",
+  "tip": "One short English tip about ${structure.label} — only when helpful, otherwise empty string"
 }
 
-Important:
-- "usedCorrectly": true only if they ACTUALLY used ${structure.label} (not just a related structure)
-- If they avoided the structure entirely (paraphrased around it), set usedCorrectly: false
-- If they attempted it but conjugated it wrong, set usedCorrectly: false but acknowledge the attempt in feedback
-- Keep feedback warm and brief — they're doing focused practice, not a conversation
-- NO markdown formatting in any field`
+Keep feedback warm and brief. NO markdown formatting in any field.`
 }
 
 export default function MissionPractice() {
@@ -330,7 +355,11 @@ export default function MissionPractice() {
                 {feedback.usedCorrectly ? (
                   <>
                     <CheckCircle size={18} className="text-olive" />
-                    <span className="text-sm font-bold text-olive">Used {structure.label} correctly!</span>
+                    <span className="text-sm font-bold text-olive">
+                      {feedback.correctVersion
+                        ? `${structure.label} ✓ — point earned (small polish below)`
+                        : `Used ${structure.label} correctly!`}
+                    </span>
                   </>
                 ) : (
                   <>
@@ -346,10 +375,14 @@ export default function MissionPractice() {
                 <p className="text-sm text-cream">{userInput}</p>
               </div>
 
-              {/* Correct version (if not used correctly) */}
+              {/* Corrected version — label depends on whether the target was used */}
               {feedback.correctVersion && (
                 <div className="bg-olive/10 border border-olive/20 rounded-lg px-3 py-2 mb-3">
-                  <p className="text-xs text-navy-600 mb-0.5">A version using {structure.label}:</p>
+                  <p className="text-xs text-navy-600 mb-0.5">
+                    {feedback.usedCorrectly
+                      ? 'Cleaner version (other small fixes):'
+                      : `A version using ${structure.label}:`}
+                  </p>
                   <p className="text-sm text-olive font-medium flex items-center gap-2">
                     {feedback.correctVersion}
                     <button
