@@ -7,7 +7,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const { level = 'B1', topic = 'daily life', reviewWords = [] } = req.body
+  const { level = 'B1', topic = 'daily life', reviewWords = [], register = 'spoken' } = req.body
 
   const reviewSection = reviewWords.length > 0
     ? `IMPORTANT: Naturally weave in 1-2 of these words the learner is still acquiring (they've seen them before but need more exposure): ${reviewWords.slice(0, 3).join(', ')}.`
@@ -19,12 +19,13 @@ Generate a short Italian paragraph for level ${level} learners about the topic: 
 
 ${reviewSection}
 
+REGISTER — this is critical, the whole passage must match this style:
+${getRegisterGuidance(register)}
+
 The paragraph should:
 - Be 80-120 words long
-- Sound like a REAL Italian person talking or writing — NOT a textbook exercise
-- Use natural, everyday Italian with casual expressions, filler words (tipo, cioè, insomma, allora), and conversational phrasing
-- Feel like something you'd hear in a bar, at dinner, or in a podcast — not a language course
-- Contain exactly 4 NEW vocabulary words that are useful in real conversations
+- Sound like a REAL Italian person talking — NOT a textbook exercise
+- Contain exactly 4 NEW vocabulary words that fit the register above (for "street", at least 2 of the 4 vocab words should be actual slang/gergo terms)
 - Be at the right difficulty for ${level}: ${getLevelGuidance(level)}
 
 IMPORTANT: Respond with valid JSON only, no text before or after.
@@ -95,6 +96,29 @@ RULES for comprehension questions:
     console.error('Listening passage error:', err.message)
     res.status(500).json({ error: err.message || 'Internal server error' })
   }
+}
+
+function getRegisterGuidance(register) {
+  const guides = {
+    standard: `STANDARD ITALIAN — clean, neutral, well-formed. Like a news report, a magazine article, or a clearly-spoken podcast. Correct grammar, no slang, minimal filler. Still natural (not stiff textbook Italian), but polished and register-neutral. This is the Italian a learner should produce in writing or formal speech.`,
+
+    spoken: `SPOKEN / CASUAL ITALIAN — the way friends actually talk to each other. Use:
+- Filler words and discourse markers: allora, tipo, cioè, insomma, comunque, niente, boh, dai, magari, vabbè
+- Contractions and elisions: 'sto, 'sta, 'na, c'ho, non c'ho, m'ha detto
+- Common colloquial verbs/expressions: fregarsene, beccarsi, farcela, mettersi, andarsene
+- Informal "tu", rhetorical questions, trailing thoughts
+- Natural rhythm of real conversation — interruptions of thought, "eh", "no?"
+Keep it understandable but unmistakably spoken, not written.`,
+
+    street: `STREET ITALIAN / GERGO GIOVANILE — how it's REALLY spoken among young people and on the street. This is the main point of the exercise, so lean in hard:
+- Heavy slang and gergo: raga, fra/frate/zio/bro, bella, beddu, scialla, sbatti (hassle), che sbatti, una cifra (a lot), spacca (it rocks), figata, che figata, flexare, ghostare, cringe, crush, mood, stare in palla, stare sbattuto, farsi le pare, paranoia, in para, bella zio, tranqui, ci sta, fomo, droppare, taggare
+- Truncations and street rhythm: 'mbe, 'sti, 'na cosa, te lo giuro, oh raga, ao
+- Intensifiers: troppo, da paura, assurdo, pazzesco, di brutto
+- Light regional flavor (Roman / Milanese youth speech) is welcome, but keep it broadly understandable
+- NO heavy profanity — keep it PG-13 (mild "che cavolo", "che palle" is fine)
+Make it sound like a voice note a 20-year-old sends to their friends, not a lesson.`,
+  }
+  return guides[register] || guides.spoken
 }
 
 function getLevelGuidance(level) {

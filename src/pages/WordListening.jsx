@@ -26,6 +26,27 @@ const TOPICS = [
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
 
+const REGISTERS = [
+  {
+    id: 'standard',
+    label: 'Standard',
+    emoji: '📻',
+    desc: 'Clean, neutral Italian — like the news or a well-written article',
+  },
+  {
+    id: 'spoken',
+    label: 'Spoken',
+    emoji: '💬',
+    desc: 'How friends actually chat — fillers, contractions, common idioms',
+  },
+  {
+    id: 'street',
+    label: 'Street',
+    emoji: '🛵',
+    desc: 'Real street Italian — slang, gergo giovanile, the way it\'s really spoken',
+  },
+]
+
 const MASTERY_COLORS = {
   new: 'text-terracotta bg-terracotta/10 border-terracotta/30',
   learning: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/30',
@@ -85,6 +106,7 @@ function ListenAndLearn() {
   const { state, addXP, addWordToLibrary, encounterWord, quizWordCorrect, quizWordWrong } = useGame()
   const [level, setLevel] = useState(state.assessmentResult?.speakingLevel || 'B1')
   const [topic, setTopic] = useState(TOPICS[0])
+  const [register, setRegister] = useState(REGISTERS[1]) // default: Spoken
   // setup | loading | listen | questions | words | quiz | done
   const [phase, setPhase] = useState('setup')
   const [passage, setPassage] = useState(null)
@@ -129,7 +151,7 @@ function ListenAndLearn() {
     setQuizAnswered(false)
     setQuizCorrectCount(0)
     try {
-      const data = await generateListeningPassage({ level, topic: topic.id, reviewWords })
+      const data = await generateListeningPassage({ level, topic: topic.id, reviewWords, register: register.id })
       setPassage(data)
       setPhase('listen')
     } catch (err) {
@@ -137,7 +159,7 @@ function ListenAndLearn() {
       setPhase('setup')
       alert('Failed to generate passage. Check your connection.')
     }
-  }, [level, topic, reviewWords])
+  }, [level, topic, reviewWords, register])
 
   const handlePlay = useCallback(() => {
     if (passage?.passage) speak(passage.passage, 0.85)
@@ -179,6 +201,7 @@ function ListenAndLearn() {
           word: w.word, translation: w.translation, definition: w.definition,
           grammar: w.grammar, exampleSentence: w.exampleSentence,
           exampleTranslation: w.exampleTranslation, level, topic: topic.id,
+          register: register.id,
         })
       }
     }
@@ -249,6 +272,22 @@ function ListenAndLearn() {
           </div>
 
           <div className="mb-6">
+            <p className="text-xs text-navy-600 mb-2 font-medium uppercase tracking-wide">Register</p>
+            <div className="grid grid-cols-3 gap-2">
+              {REGISTERS.map(r => (
+                <button key={r.id} onClick={() => setRegister(r)}
+                  title={r.desc}
+                  className={`flex flex-col items-start gap-1 px-3 py-2.5 rounded-xl text-sm transition-colors text-left ${register.id === r.id ? 'bg-terracotta/20 text-terracotta border border-terracotta/40' : 'bg-navy-800 text-navy-600 hover:text-cream border border-transparent'}`}>
+                  <span className="flex items-center gap-1.5 font-medium">
+                    <span>{r.emoji}</span> {r.label}
+                  </span>
+                  <span className={`text-[10px] leading-tight ${register.id === r.id ? 'text-terracotta/70' : 'text-navy-600'}`}>{r.desc}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mb-6">
             <p className="text-xs text-navy-600 mb-2 font-medium uppercase tracking-wide">Topic</p>
             <div className="grid grid-cols-3 gap-2">
               {TOPICS.map(t => (
@@ -288,7 +327,7 @@ function ListenAndLearn() {
       <div className="flex flex-col items-center justify-center py-24 gap-4">
         <Loader2 size={32} className="text-terracotta animate-spin" />
         <p className="text-cream font-medium">Generating your passage...</p>
-        <p className="text-navy-600 text-sm">Creating a {level} level passage about {topic.label}</p>
+        <p className="text-navy-600 text-sm">Creating a {level} level {register.label.toLowerCase()} passage about {topic.label}</p>
       </div>
     )
   }
@@ -600,6 +639,12 @@ function WordLibrary() {
                   <span className={`text-xs px-2 py-0.5 rounded-full border ${MASTERY_COLORS[mastery]}`}>
                     {mastery}
                   </span>
+                  {w.register === 'street' && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-coral/15 text-coral border border-coral/30">🛵 street</span>
+                  )}
+                  {w.register === 'standard' && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">📻 standard</span>
+                  )}
                   {w.grammar && <span className="text-xs text-navy-600">{w.grammar}</span>}
                 </div>
                 <p className="text-sm text-terracotta">{w.translation}</p>
