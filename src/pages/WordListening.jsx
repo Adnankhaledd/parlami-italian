@@ -122,12 +122,29 @@ function ListenAndLearn() {
 
   const { speak, speaking } = useSpeechSynthesis()
 
+  const lib = state.wordLibrary || []
+
+  // Words still being learned — excluded if mastered (belt & suspenders: use getMastery too)
   const reviewWords = useMemo(() => {
-    return (state.wordLibrary || [])
-      .filter(w => !w.mastered && (w.correctQuizzes || 0) < 5)
+    return lib
+      .filter(w => getMastery(w) !== 'mastered' && getMastery(w) !== 'familiar')
       .map(w => w.word)
       .slice(0, 5)
-  }, [state.wordLibrary])
+  }, [lib])
+
+  // Every word already in the library — the AI must NOT reuse any of these
+  // as one of the 4 "new" vocabulary words (especially mastered ones).
+  const knownWords = useMemo(() => {
+    return lib.map(w => w.word).filter(Boolean).slice(-120)
+  }, [lib])
+
+  // Set of normalized mastered words for client-side filtering
+  const masteredSet = useMemo(() => {
+    return new Set(
+      lib.filter(w => getMastery(w) === 'mastered')
+        .map(w => (w.word || '').toLowerCase().trim())
+    )
+  }, [lib])
 
   const questions = useMemo(() => {
     if (!passage) return []
@@ -151,7 +168,14 @@ function ListenAndLearn() {
     setQuizAnswered(false)
     setQuizCorrectCount(0)
     try {
-      const data = await generateListeningPassage({ level, topic: topic.id, reviewWords, register: register.id })
+      const data = await generateListeningPassage({ level, topic: topic.id, reviewWords, register: register.id, knownWords })
+      // Drop any "new" vocab word the learner has already mastered
+      if (data?.vocabularyWords?.length) {
+        const filtered = data.vocabularyWords.filter(
+          v => !masteredSet.has((v.word || '').toLowerCase().trim())
+        )
+        data.vocabularyWords = filtered.length > 0 ? filtered : data.vocabularyWords
+      }
       setPassage(data)
       setPhase('listen')
     } catch (err) {
@@ -159,7 +183,7 @@ function ListenAndLearn() {
       setPhase('setup')
       alert('Failed to generate passage. Check your connection.')
     }
-  }, [level, topic, reviewWords, register])
+  }, [level, topic, reviewWords, register, knownWords, masteredSet])
 
   const handlePlay = useCallback(() => {
     if (passage?.passage) speak(passage.passage, 0.85)

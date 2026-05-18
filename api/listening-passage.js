@@ -7,10 +7,14 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const { level = 'B1', topic = 'daily life', reviewWords = [], register = 'spoken' } = req.body
+  const { level = 'B1', topic = 'daily life', reviewWords = [], register = 'spoken', knownWords = [] } = req.body
 
   const reviewSection = reviewWords.length > 0
     ? `IMPORTANT: Naturally weave in 1-2 of these words the learner is still acquiring (they've seen them before but need more exposure): ${reviewWords.slice(0, 3).join(', ')}.`
+    : ''
+
+  const knownSection = knownWords.length > 0
+    ? `\nALREADY-KNOWN WORDS — the learner has these in their library already. The 4 NEW vocabulary words you return MUST NOT be any of these (pick genuinely new, unfamiliar words instead):\n${knownWords.slice(-100).join(', ')}\n`
     : ''
 
   const systemPrompt = `You are an expert Italian language teacher creating a listening comprehension exercise.
@@ -18,6 +22,7 @@ export default async function handler(req, res) {
 Generate a short Italian paragraph for level ${level} learners about the topic: "${topic}".
 
 ${reviewSection}
+${knownSection}
 
 REGISTER — this is critical, the whole passage must match this style:
 ${getRegisterGuidance(register)}
@@ -25,7 +30,7 @@ ${getRegisterGuidance(register)}
 The paragraph should:
 - Be 80-120 words long
 - Sound like a REAL Italian person talking — NOT a textbook exercise
-- Contain exactly 4 NEW vocabulary words that fit the register above (for "street", at least 2 of the 4 vocab words should be actual slang/gergo terms)
+- Contain exactly 4 NEW vocabulary words that fit the register above (for "street", at least 2 of the 4 vocab words should be actual slang/gergo terms). These 4 words MUST be words the learner does NOT already know — never reuse anything from the ALREADY-KNOWN WORDS list above
 - Be at the right difficulty for ${level}: ${getLevelGuidance(level)}
 
 IMPORTANT: Respond with valid JSON only, no text before or after.

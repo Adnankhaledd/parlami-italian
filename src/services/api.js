@@ -30,11 +30,11 @@ export async function generateComprehensionQuestions({ passage, level = 'B1', qu
   return response.json()
 }
 
-export async function generateListeningPassage({ level = 'B1', topic = 'daily life', reviewWords = [], register = 'spoken' }) {
+export async function generateListeningPassage({ level = 'B1', topic = 'daily life', reviewWords = [], register = 'spoken', knownWords = [] }) {
   const response = await fetch(`${API_BASE}/listening-passage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ level, topic, reviewWords, register }),
+    body: JSON.stringify({ level, topic, reviewWords, register, knownWords }),
   })
   if (!response.ok) throw new Error('Failed to generate passage')
   return response.json()
